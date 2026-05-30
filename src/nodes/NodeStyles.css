@@ -1,0 +1,43 @@
+/* NodeStyles.css */
+/* Shared styling for custom React Flow nodes – dark mode + glassmorphism */
+
+.node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: hsla(210, 15%, 18%, 0.7);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-family: 'Inter', system-ui, sans-serif;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  min-width: 100px;
+  text-align: center;
+}
+
+.node .icon {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.node:hover {
+  background: hsla(210, 15%, 22%, 0.85);
+  transform: scale(1.04);
+  box-shadow: 0 4px 12px rgba(255,255,255,0.2);
+}
+
+/* Specific node type colors */
+.provider-node { background: hsla(200, 70%, 45%, 0.8); }
+.tenant-node   { background: hsla(170, 60%, 40%, 0.8); }
+.subnet-node   { 
+  background: hsla(45, 80%, 55%, 0.8);
+  width: 30px;
+  height: 150px;
+  min-width: unset;
+  padding: 4px 2px;
+}
+.router-node   { background: hsla(300, 60%, 45%, 0.8); }
+.instance-node { background: hsla(0, 70%, 45%, 0.8); }
+.fip-node      { background: hsla(55, 80%, 50%, 0.8); }
