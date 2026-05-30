@@ -267,8 +267,8 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   }
 });
 
-// Start the server running via Bun on port 5000
-const port = 5000;
+// Start the server running via Bun on a custom port from environment variables, falling back to 5000
+const port = parseInt(Bun.env.PORT || process.env.PORT || '5000', 10);
 console.log(`Hono backend is running on http://localhost:${port}`);
 
 export default {
