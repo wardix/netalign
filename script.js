@@ -2,6 +2,16 @@
 // Client-side controller for dynamic topology manager.
 // Interacts with Bun/Hono Backend API and renders with Cytoscape.js.
 
+// --- API CONFIGURATION (APPROACH 2: CROSS-ORIGIN DEPLOYMENT) ---
+// Automatically resolves the API Base URL based on where the app is running.
+// - Development: Uses Vite dev proxy (empty string relative path)
+// - Production: Directs API calls to your dedicated Hono/Bun VPS backend domain
+const API_BASE = window.location.hostname === 'localhost' || 
+                 window.location.hostname === '127.0.0.1' || 
+                 window.location.hostname.includes('agentix.nusa.net.id')
+  ? '' // Uses Vite Proxy on local dev
+  : 'https://api.netalign.com'; // CHANGE THIS to your live Bun/Hono VPS domain in production
+
 let topologies = [];
 let activeTopologyId = '';
 let activeTopologyData = null;
@@ -38,7 +48,7 @@ function initUI() {
       return;
     }
 
-    fetch('/api/topologies', {
+    fetch(`${API_BASE}/api/topologies`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
@@ -69,7 +79,7 @@ function initUI() {
       return;
     }
 
-    fetch(`/api/topologies/${activeTopologyId}`, {
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}`, {
       method: 'DELETE'
     })
     .then(res => {
@@ -110,7 +120,7 @@ function initUI() {
       return;
     }
 
-    fetch(`/api/topologies/${activeTopologyId}/nodes`, {
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nodeId, type, label })
@@ -135,7 +145,7 @@ function initUI() {
     if (!activeTopologyId || !selectedNodeId) return;
     if (!confirm(`Hapus node "${selectedNodeId}" beserta seluruh sambungan edge-nya?`)) return;
 
-    fetch(`/api/topologies/${activeTopologyId}/nodes/${selectedNodeId}`, {
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${selectedNodeId}`, {
       method: 'DELETE'
     })
     .then(res => {
@@ -181,7 +191,7 @@ function initUI() {
       }
     }
 
-    fetch(`/api/topologies/${activeTopologyId}/edges`, {
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, target })
@@ -204,7 +214,7 @@ function initUI() {
     if (!activeTopologyId || !selectedEdgeId) return;
     if (!confirm(`Hapus koneksi edge "${selectedEdgeId}"?`)) return;
 
-    fetch(`/api/topologies/${activeTopologyId}/edges/${selectedEdgeId}`, {
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${selectedEdgeId}`, {
       method: 'DELETE'
     })
     .then(res => {
@@ -224,7 +234,7 @@ function initUI() {
 
 // Fetch all topologies from the Hono server
 function loadTopologies(selectId = '') {
-  fetch('/api/topologies')
+  fetch(`${API_BASE}/api/topologies`)
     .then(res => res.json())
     .then(data => {
       topologies = data;
@@ -266,7 +276,7 @@ function loadTopology(id) {
   activeTopologyId = id;
   resetSelection();
 
-  fetch(`/api/topologies/${id}`)
+  fetch(`${API_BASE}/api/topologies/${id}`)
     .then(res => {
       if (!res.ok) throw new Error('Topologi tidak ditemukan');
       return res.json();

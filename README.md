@@ -79,6 +79,27 @@ Once both servers are running, open your web browser and navigate to:
 
 ---
 
+## 🌐 Deployment & Cross-Origin Setup (Approach 2)
+
+NetAlign natively supports separate cross-origin deployment (e.g. hosting the static frontend on Netlify/Vercel CDN, and hosting the Hono backend on a dedicated VPS/Cloud instance).
+
+### Dynamic API Base URL Resolution:
+The frontend [script.js](file:///home/wardix/agy/scratchpad/script.js) features an automated environment detector at the very top of the file:
+1.  **Local Development**: If the browser's hostname is `localhost`, `127.0.0.1`, or an agent development domain, it resolves `API_BASE` to `''` (empty string). This routes all AJAX calls through Vite's local development proxy to prevent CORS issues.
+2.  **Production Deployment**: On any other production domain, it automatically appends your live backend domain to all REST API endpoints.
+
+### Steps to Deploy Separately:
+1.  Open [script.js](file:///home/wardix/agy/scratchpad/script.js) and locate the `API_BASE` configuration at the top (Line 12).
+2.  Replace `'https://api.netalign.com'` with your live Hono backend VPS domain (e.g. `https://api.yourcompany.com`).
+3.  Build the static optimized frontend bundle:
+    ```bash
+    bun run build
+    ```
+4.  Upload the contents of the newly generated **`dist/`** directory directly to your static hosting platform (e.g. Vercel, Netlify, or AWS S3).
+5.  Deploy the backend server to your VPS running Bun, and set the custom `PORT` variable in your production environment variables (refer to `.env.example`).
+
+---
+
 ## 🔌 API Endpoints Reference
 
 All requests must be prefixed with `/api`. Vite automatically routes `/api/*` traffic from port `3000` to the Bun backend on port `5000`.
