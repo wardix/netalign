@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 
-import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions } from 'antd';
-import TopologyGraph from './components/TopologyGraph';
+import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions, Spin } from 'antd';
 import { getApiErrorMessage } from './api/client.ts';
 import { topologyApi } from './api/topologies.ts';
 import { useTopologies } from './hooks/useTopologies.ts';
@@ -18,6 +17,16 @@ import {
 import type { TopologyEdge, TopologyNodeTypeValue } from '../shared/types.ts';
 
 const { Header, Sider, Content } = Layout;
+
+const TopologyGraph = lazy(() => import('./components/TopologyGraph'));
+
+const graphFallbackStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  height: '100%',
+};
 
 const App: React.FC = () => {
   const { t, locale, setLocale } = useI18n();
@@ -606,17 +615,25 @@ const App: React.FC = () => {
           backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 0)',
           backgroundSize: '24px 24px'
         }}>
-          <TopologyGraph
-            nodes={activeNodes}
-            edges={activeEdges}
-            loading={topologyLoading}
-            error={topologyError}
-            hasTopology={!!activeTopologyId}
-            onRetry={bumpTopology}
-            onNodeSelect={handleNodeSelect}
-            onEdgeSelect={handleEdgeSelect}
-            onNodePositionsChange={saveNodePositions}
-          />
+          <Suspense
+            fallback={
+              <div style={graphFallbackStyle}>
+                <Spin size="large" tip={t('canvas.loading')} />
+              </div>
+            }
+          >
+            <TopologyGraph
+              nodes={activeNodes}
+              edges={activeEdges}
+              loading={topologyLoading}
+              error={topologyError}
+              hasTopology={!!activeTopologyId}
+              onRetry={bumpTopology}
+              onNodeSelect={handleNodeSelect}
+              onEdgeSelect={handleEdgeSelect}
+              onNodePositionsChange={saveNodePositions}
+            />
+          </Suspense>
         </Content>
       </Layout>
       </Layout>
