@@ -1,4 +1,6 @@
-export type TopologyNodeType = 'subnet' | 'router' | 'instance';
+import type { TopologyNodeType } from './types.ts';
+
+export type { TopologyNodeType } from './types.ts';
 
 export const EDGE_VALIDATION_ERROR =
   'Invalid connection: routers and instances can only connect directly to subnets.';

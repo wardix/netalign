@@ -3,13 +3,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Button, Empty, Spin } from 'antd';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { useI18n } from '../i18n/I18nProvider.tsx';
-import {
-  computeLayout,
-  getConnectedPeerIds,
-  type LayoutEdge,
-} from '../../shared/layoutEngine.ts';
+import { computeLayout, getConnectedPeerIds } from '../../shared/layoutEngine.ts';
 import type { NodePosition } from '../../shared/nodePosition.ts';
 import type { TopologyNode } from '../../shared/topologyNodes.ts';
+import type { TopologyEdge } from '../../shared/types.ts';
 
 interface NodePositionUpdate {
   nodeId: string;
@@ -18,7 +15,7 @@ interface NodePositionUpdate {
 
 interface TopologyGraphProps {
   nodes: TopologyNode[];
-  edges: LayoutEdge[];
+  edges: TopologyEdge[];
   loading?: boolean;
   error?: string | null;
   hasTopology?: boolean;

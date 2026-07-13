@@ -7,6 +7,16 @@ import { buildEdgeId } from '../shared/edgeIds.ts';
 import { getGatewayValidationError, normalizeGateway } from '../shared/edgeGateway.ts';
 import { getPositionValidationError, parseNodePosition } from '../shared/nodePosition.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
+import type {
+  CreateEdgeBody,
+  CreateNodeBody,
+  Topology,
+  TopologyEdge,
+  TopologyNode,
+  TopologySummary,
+  UpdateEdgeBody,
+  UpdateNodeBody,
+} from '../shared/types.ts';
 import { resolveTopologyFilePath, validateRouteId } from './paths.ts';
 import type { Context } from 'hono';
 
@@ -16,6 +26,10 @@ const app = new Hono();
 app.use('*', cors());
 
 const DATA_DIR = resolve(import.meta.dir, 'data');
+
+async function loadTopology(filePath: string): Promise<Topology> {
+  return (await Bun.file(filePath).json()) as Topology;
+}
 
 function invalidIdResponse(c: Context, id: string) {
   const validation = validateRouteId(id);
@@ -39,15 +53,15 @@ function topologyPathOrResponse(c: Context, id: string) {
 app.get('/api/topologies', async (c) => {
   try {
     const files = await readdir(DATA_DIR);
-    const topologies = [];
+    const topologies: TopologySummary[] = [];
 
     for (const file of files) {
       if (file.endsWith('.json')) {
         const filePath = join(DATA_DIR, file);
-        const fileContent = await Bun.file(filePath).json();
+        const fileContent = await loadTopology(filePath);
         topologies.push({
           id: fileContent.id,
-          name: fileContent.name || fileContent.id
+          name: fileContent.name || fileContent.id,
         });
       }
     }
@@ -71,7 +85,7 @@ app.get('/api/topologies/:id', async (c) => {
   }
 
   try {
-    const data = await Bun.file(filePath).json();
+    const data = await loadTopology(filePath);
     return c.json(data);
   } catch (error) {
     console.error('Error fetching topology:', error);
@@ -98,11 +112,11 @@ app.patch('/api/topologies/:id', async (c) => {
       return c.json({ error: 'Name is required' }, 400);
     }
 
-    const data = await Bun.file(filePath).json();
+    const data = await loadTopology(filePath);
     data.name = name;
 
     await Bun.write(filePath, JSON.stringify(data, null, 2));
-    return c.json({ id: data.id, name: data.name });
+    return c.json({ id: data.id, name: data.name } satisfies TopologySummary);
   } catch (error) {
     console.error('Error updating topology:', error);
     return c.json({ error: 'Failed to update topology' }, 500);
@@ -121,11 +135,11 @@ app.post('/api/topologies', async (c) => {
     }
     const { filePath } = pathResult;
 
-    const newTopology = {
+    const newTopology: Topology = {
       id,
       name,
       nodes: [],
-      edges: []
+      edges: [],
     };
 
     await Bun.write(filePath, JSON.stringify(newTopology, null, 2));
@@ -189,7 +203,7 @@ app.post('/api/topologies/:id/nodes', async (c) => {
   }
 
   try {
-    const body = await c.req.json();
+    const body = (await c.req.json()) as CreateNodeBody;
     const { nodeId, type, label } = body;
 
     if (!nodeId || !type) {
@@ -199,17 +213,16 @@ app.post('/api/topologies/:id/nodes', async (c) => {
     const invalidNodeId = invalidIdResponse(c, nodeId);
     if (invalidNodeId) return invalidNodeId;
 
-    const data = await Bun.file(filePath).json();
+    const data = await loadTopology(filePath);
 
-    // Check duplicate node ID
-    if (data.nodes.some((n: any) => n.id === nodeId)) {
+    if (data.nodes.some(n => n.id === nodeId)) {
       return c.json({ error: 'Node ID already exists' }, 400);
     }
 
-    const newNode = {
+    const newNode: TopologyNode = {
       id: nodeId,
       type,
-      data: { label: label || nodeId }
+      data: { label: label || nodeId },
     };
 
     data.nodes.push(newNode);
@@ -238,7 +251,7 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
   }
 
   try {
-    const body = await c.req.json();
+    const body = (await c.req.json()) as UpdateNodeBody;
     const labelProvided = Object.prototype.hasOwnProperty.call(body, 'label');
     const positionProvided = Object.prototype.hasOwnProperty.call(body, 'position');
 
@@ -246,8 +259,8 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
       return c.json({ error: 'Label or position is required' }, 400);
     }
 
-    const data = await Bun.file(filePath).json();
-    const node = data.nodes.find((n: { id: string }) => n.id === nodeId);
+    const data = await loadTopology(filePath);
+    const node = data.nodes.find(n => n.id === nodeId);
 
     if (!node) {
       return c.json({ error: 'Node not found' }, 404);
@@ -293,17 +306,16 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   }
 
   try {
-    const data = await Bun.file(filePath).json();
+    const data = await loadTopology(filePath);
 
     const initialNodeCount = data.nodes.length;
-    data.nodes = data.nodes.filter((n: any) => n.id !== nodeId);
+    data.nodes = data.nodes.filter(n => n.id !== nodeId);
 
     if (data.nodes.length === initialNodeCount) {
       return c.json({ error: 'Node not found' }, 404);
     }
 
-    // Cascade delete connected edges
-    data.edges = data.edges.filter((e: any) => e.source !== nodeId && e.target !== nodeId);
+    data.edges = data.edges.filter(e => e.source !== nodeId && e.target !== nodeId);
 
     await Bun.write(filePath, JSON.stringify(data, null, 2));
     return c.json({ success: true, message: `Node ${nodeId} deleted with connections` });
@@ -325,7 +337,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
   }
 
   try {
-    const body = await c.req.json();
+    const body = (await c.req.json()) as CreateEdgeBody;
     const { source, target } = body;
 
     if (!source || !target) {
@@ -336,10 +348,10 @@ app.post('/api/topologies/:id/edges', async (c) => {
       return c.json({ error: 'Source and target must be different nodes' }, 400);
     }
 
-    const data = await Bun.file(filePath).json();
+    const data = await loadTopology(filePath);
 
-    const sourceNode = data.nodes.find((n: { id: string }) => n.id === source);
-    const targetNode = data.nodes.find((n: { id: string }) => n.id === target);
+    const sourceNode = data.nodes.find(n => n.id === source);
+    const targetNode = data.nodes.find(n => n.id === target);
 
     if (!sourceNode || !targetNode) {
       return c.json({ error: 'Source or Target node does not exist' }, 400);
@@ -353,7 +365,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
     const edgeId = buildEdgeId(source, target);
 
     // Check duplicate edge ID
-    if (data.edges.some((e: any) => e.id === edgeId)) {
+    if (data.edges.some(e => e.id === edgeId)) {
       return c.json({ error: 'Edge already exists between these nodes' }, 400);
     }
 
@@ -365,7 +377,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
       }
     }
 
-    const newEdge: { id: string; source: string; target: string; gateway?: string } = {
+    const newEdge: TopologyEdge = {
       id: edgeId,
       source,
       target,
@@ -398,7 +410,7 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
   }
 
   try {
-    const body = await c.req.json();
+    const body = (await c.req.json()) as UpdateEdgeBody;
     const gateway = normalizeGateway(body.gateway);
     if (gateway) {
       const gatewayError = getGatewayValidationError(gateway);
@@ -407,8 +419,8 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
       }
     }
 
-    const data = await Bun.file(filePath).json();
-    const edge = data.edges.find((e: { id: string }) => e.id === edgeId);
+    const data = await loadTopology(filePath);
+    const edge = data.edges.find(e => e.id === edgeId);
 
     if (!edge) {
       return c.json({ error: 'Edge not found' }, 404);
@@ -444,10 +456,10 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   }
 
   try {
-    const data = await Bun.file(filePath).json();
+    const data = await loadTopology(filePath);
 
     const initialEdgeCount = data.edges.length;
-    data.edges = data.edges.filter((e: any) => e.id !== edgeId);
+    data.edges = data.edges.filter(e => e.id !== edgeId);
 
     if (data.edges.length === initialEdgeCount) {
       return c.json({ error: 'Edge not found' }, 404);
