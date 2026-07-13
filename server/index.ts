@@ -2,18 +2,33 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { readdir, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
+import { resolveTopologyFilePath, validateRouteId } from './paths.ts';
+import type { Context } from 'hono';
 
 const app = new Hono();
 
 // Enable CORS for all routes (to support both proxy and direct requests)
 app.use('*', cors());
 
-const DATA_DIR = join(import.meta.dir, 'data');
+const DATA_DIR = resolve(import.meta.dir, 'data');
 
-// Helper to get full file path
-const getFilePath = (id: string) => join(DATA_DIR, `${id}.json`);
+function invalidIdResponse(c: Context, id: string) {
+  const validation = validateRouteId(id);
+  if (!validation.ok) {
+    return c.json({ error: validation.error }, 400);
+  }
+  return null;
+}
+
+function topologyPathOrResponse(c: Context, id: string) {
+  const pathResult = resolveTopologyFilePath(id);
+  if (!pathResult.ok) {
+    return { response: c.json({ error: pathResult.error }, 400) };
+  }
+  return { filePath: pathResult.filePath };
+}
 
 // --- API ROUTES ---
 
@@ -44,7 +59,9 @@ app.get('/api/topologies', async (c) => {
 // 2. Get specific topology detail
 app.get('/api/topologies/:id', async (c) => {
   const id = c.req.param('id');
-  const filePath = getFilePath(id);
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
@@ -65,7 +82,11 @@ app.post('/api/topologies', async (c) => {
     const body = await c.req.json();
     const name = body.name || 'New Topology';
     const id = `topology-${Date.now()}`;
-    const filePath = getFilePath(id);
+    const pathResult = resolveTopologyFilePath(id);
+    if (!pathResult.ok) {
+      return c.json({ error: pathResult.error }, 400);
+    }
+    const { filePath } = pathResult;
 
     const newTopology = {
       id,
@@ -86,7 +107,9 @@ app.post('/api/topologies', async (c) => {
 app.post('/api/topologies/:id/delete', async (c) => {
   // Use POST for delete from some clients, but we also support DELETE
   const id = c.req.param('id');
-  const filePath = getFilePath(id);
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
@@ -104,7 +127,9 @@ app.post('/api/topologies/:id/delete', async (c) => {
 // Also support native DELETE verb
 app.delete('/api/topologies/:id', async (c) => {
   const id = c.req.param('id');
-  const filePath = getFilePath(id);
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
@@ -122,7 +147,9 @@ app.delete('/api/topologies/:id', async (c) => {
 // 5. Add a node to a topology
 app.post('/api/topologies/:id/nodes', async (c) => {
   const id = c.req.param('id');
-  const filePath = getFilePath(id);
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
@@ -135,6 +162,9 @@ app.post('/api/topologies/:id/nodes', async (c) => {
     if (!nodeId || !type) {
       return c.json({ error: 'Missing nodeId or type' }, 400);
     }
+
+    const invalidNodeId = invalidIdResponse(c, nodeId);
+    if (invalidNodeId) return invalidNodeId;
 
     const data = await Bun.file(filePath).json();
 
@@ -163,7 +193,12 @@ app.post('/api/topologies/:id/nodes', async (c) => {
 app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   const id = c.req.param('id');
   const nodeId = c.req.param('nodeId');
-  const filePath = getFilePath(id);
+  const invalidNode = invalidIdResponse(c, nodeId);
+  if (invalidNode) return invalidNode;
+
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
@@ -193,7 +228,9 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
 // 7. Add an edge to a topology
 app.post('/api/topologies/:id/edges', async (c) => {
   const id = c.req.param('id');
-  const filePath = getFilePath(id);
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
@@ -252,7 +289,12 @@ app.post('/api/topologies/:id/edges', async (c) => {
 app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   const id = c.req.param('id');
   const edgeId = c.req.param('edgeId');
-  const filePath = getFilePath(id);
+  const invalidEdge = invalidIdResponse(c, edgeId);
+  if (invalidEdge) return invalidEdge;
+
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
 
   if (!(await Bun.file(filePath).exists())) {
     return c.json({ error: 'Topology not found' }, 404);
