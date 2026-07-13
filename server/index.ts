@@ -27,6 +27,7 @@ import {
   codeFromErrorMessage,
   type ApiErrorCode,
 } from '../shared/apiErrors.ts';
+import { openApiDocument } from '../shared/openapi.ts';
 import { createCorsOriginResolver } from './corsConfig.ts';
 import { getLiveness, getReadiness } from './health.ts';
 import {
@@ -34,6 +35,7 @@ import {
   isRequestLoggingEnabled,
   logger,
 } from './logger.ts';
+import { isOpenApiUiEnabled, renderSwaggerUiHtml } from './openapiUi.ts';
 import { validateRouteId } from './paths.ts';
 import * as topologyStore from './topologyStore.ts';
 import type { Context } from 'hono';
@@ -128,6 +130,17 @@ function topologyIdOrResponse(c: Context, id: string) {
 function topologyNotFound(c: Context) {
   return jsonError(c, 404, 'TOPOLOGY_NOT_FOUND');
 }
+
+// Machine-readable OpenAPI 3 document (always available).
+app.get('/api/openapi.json', c => c.json(openApiDocument));
+
+// Interactive docs (Swagger UI) — disabled in production unless NETALIGN_OPENAPI_UI=1.
+app.get('/api/docs', c => {
+  if (!isOpenApiUiEnabled()) {
+    return jsonError(c, 404, 'INTERNAL_ERROR', 'API docs UI is disabled');
+  }
+  return c.html(renderSwaggerUiHtml('/api/openapi.json'));
+});
 
 // 1. Get all topologies
 app.get('/api/topologies', async (c) => {

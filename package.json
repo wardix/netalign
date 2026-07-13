@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "bun test --preload ./server/testPreload.ts --preload ./server/domPreload.ts shared server scripts src/history src/api.test.ts src/api/client.test.ts src/i18n/translations.test.ts src/hooks/selectionUtils.test.ts src/hooks/useMediaQuery.test.ts src/components/GraphErrorBoundary.test.tsx",
+    "openapi:check": "bun -e \"import { validateOpenApiDocument } from './shared/openapi.ts'; const p = validateOpenApiDocument(); if (p.length) { console.error(p.join('\\n')); process.exit(1); } console.log('OpenAPI OK');\"",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
     "db:reset": "bun run scripts/db-reset.ts",

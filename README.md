@@ -274,6 +274,17 @@ Also: search box (top-left) finds nodes by label/ID; toolbar **Fit** / **Focus**
 
 All requests are prefixed with `/api`. Vite proxies `/api/*` from port 3000 to the backend on port 5000.
 
+### OpenAPI
+
+Machine-readable contract (aligned with `shared/types.ts` and `shared/apiErrors.ts`):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/openapi.json` | OpenAPI 3.0 document |
+| `GET` | `/api/docs` | Swagger UI (non-production by default; set `NETALIGN_OPENAPI_UI=1` to force on) |
+
+Validate the spec locally: `bun run openapi:check` (also covered by unit tests).
+
 ### Health
 
 | Method | Endpoint | Description |
@@ -288,6 +299,7 @@ All requests are prefixed with `/api`. Vite proxies `/api/*` from port 3000 to t
 | `GET` | `/api/topologies` | List all topologies `{ id, name }` |
 | `GET` | `/api/topologies/:id` | Fetch full topology (nodes and edges) |
 | `POST` | `/api/topologies` | Create topology. Body: `{ name }` |
+| `POST` | `/api/topologies/import` | Import topology document as a new topology |
 | `PATCH` | `/api/topologies/:id` | Rename topology. Body: `{ name }` |
 | `DELETE` | `/api/topologies/:id` | Delete topology |
 | `POST` | `/api/topologies/:id/delete` | **Deprecated** alias for delete (returns `Deprecation` / `Sunset` headers; prefer `DELETE`) |
@@ -307,6 +319,7 @@ Codes are defined in `shared/apiErrors.ts` (e.g. `TOPOLOGY_NOT_FOUND`, `EDGE_INV
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/topologies/:id/nodes` | Add node. Body: `{ nodeId, type, label }` |
+| `PUT` | `/api/topologies/:id/nodes/positions` | Batch-update positions. Body: `{ updates: [{ nodeId, position }] }` |
 | `PUT` | `/api/topologies/:id/nodes/:nodeId` | Update label and/or position. Body: `{ label? }` or `{ position: { x, y } }` |
 | `DELETE` | `/api/topologies/:id/nodes/:nodeId` | Delete node and connected edges |
 
