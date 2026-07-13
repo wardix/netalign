@@ -54,6 +54,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   const { t } = useI18n();
   const [elements, setElements] = useState<any[]>([]);
   const [styles, setStyles] = useState<any[]>([]);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
   const cyRef = useRef<any>(null);
   const dragStateRef = useRef<{
     nodeId: string;
@@ -61,10 +62,18 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   } | null>(null);
 
   useEffect(() => {
-    const { elements: cyElements, styles: cyStyles } = computeLayout(nodes, edges);
-    setElements(cyElements);
-    setStyles(cyStyles);
-  }, [nodes, edges]);
+    try {
+      const { elements: cyElements, styles: cyStyles } = computeLayout(nodes, edges);
+      setElements(cyElements);
+      setStyles(cyStyles);
+      setLayoutError(null);
+    } catch (err) {
+      console.error('Layout compute failed', err);
+      setElements([]);
+      setStyles([]);
+      setLayoutError(t('canvas.crashDetail'));
+    }
+  }, [nodes, edges, t]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -75,8 +84,14 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
       cy.nodes().forEach((node: any) => {
         livePositions[node.id()] = node.position();
       });
-      const { styles: nextStyles } = computeLayout(nodes, edges, livePositions);
-      cy.style(nextStyles);
+      try {
+        const { styles: nextStyles } = computeLayout(nodes, edges, livePositions);
+        cy.style(nextStyles);
+        setLayoutError(null);
+      } catch (err) {
+        console.error('Layout style refresh failed', err);
+        setLayoutError(t('canvas.crashDetail'));
+      }
     };
 
     const onNodeTap = (evt: any) => {
@@ -192,17 +207,25 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
   };
 
-  if (error) {
+  const displayError = error || layoutError;
+
+  if (displayError) {
     return (
       <div style={canvasOverlayStyle}>
         <Alert
           type="error"
           showIcon
-          message={t('canvas.loadFailed')}
-          description={error}
+          message={layoutError && !error ? t('canvas.crashTitle') : t('canvas.loadFailed')}
+          description={displayError}
           action={
             onRetry ? (
-              <Button size="small" onClick={onRetry}>
+              <Button
+                size="small"
+                onClick={() => {
+                  setLayoutError(null);
+                  onRetry();
+                }}
+              >
                 {t('common.retry')}
               </Button>
             ) : undefined
