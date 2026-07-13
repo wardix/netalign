@@ -135,20 +135,29 @@ NetAlign supports separate deployment (e.g. static frontend on Netlify/Vercel, b
 
 The frontend resolves `API_BASE` in `src/api.ts`:
 
-1. **Local development**: If the hostname is `localhost`, `127.0.0.1`, or an agent development domain, `API_BASE` is `''` so requests go through Vite's proxy (no CORS issues).
-2. **Production**: On any other domain, requests use the configured production backend URL.
+1. **`VITE_API_BASE`** (build-time): When set, used as the absolute backend origin (trailing slash stripped). Set to empty string for same-origin requests.
+2. **Local development**: If `VITE_API_BASE` is unset and the page is on `localhost`, `127.0.0.1`, or the agent development domain, `API_BASE` is `''` so `/api` goes through the Vite proxy (no CORS issues).
+3. **Otherwise**: Same-origin (`''`) — no production API domain is hardcoded.
 
 ### Steps to Deploy Separately
 
-1. Open `src/api.ts` and set the production backend URL (default: `https://api.netalign.com`).
-2. Build the frontend:
+1. Build the frontend with your API origin:
 
    ```bash
-   bun run build
+   VITE_API_BASE=https://api.example.com bun run build
    ```
 
-3. Upload the contents of `dist/` to your static hosting platform.
-4. Deploy the backend on a VPS with Bun. Set `PORT` (and optionally `NETALIGN_DB_PATH`) in your environment. See `.env.example`.
+2. Upload the contents of `dist/` to your static hosting platform.
+3. Deploy the backend on a VPS with Bun. Set at least:
+
+   ```bash
+   NODE_ENV=production
+   CORS_ORIGINS=https://your-frontend.example.com
+   PORT=5000
+   # optional: NETALIGN_DB_PATH=/var/lib/netalign/netalign.db
+   ```
+
+4. Ensure the browser origin of the SPA is listed in `CORS_ORIGINS` (comma-separated if multiple).
 
 ---
 
@@ -161,6 +170,8 @@ Copy `.env.example` to `.env` and adjust as needed:
 | `PORT` | `5000` | Hono backend listen port |
 | `NODE_ENV` | `development` | Environment mode |
 | `NETALIGN_DB_PATH` | `server/data/netalign.db` | SQLite database file path |
+| `CORS_ORIGINS` | (dev local origins) | Comma-separated allowed browser origins; empty in production denies cross-origin |
+| `VITE_API_BASE` | (unset → proxy/same-origin) | Frontend API origin at **build** time |
 
 ---
 
