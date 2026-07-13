@@ -9,6 +9,11 @@ function formItem(page: Page, label: string) {
 }
 
 async function waitForTopologyReady(page: Page) {
+  // Default UI locale is Indonesian; reset any EN leftover from prior tests (localStorage).
+  await page.addInitScript(() => {
+    localStorage.setItem('netalign-locale', 'id');
+  });
+
   const listResponse = page.waitForResponse(
     response =>
       response.request().method() === 'GET' &&
@@ -36,10 +41,36 @@ function openDropdownOption(page: Page, label: string | RegExp) {
     .filter({ hasText: label });
 }
 
+function optionSearchText(optionText: string | RegExp): string {
+  if (typeof optionText === 'string') {
+    return optionText.replace(/\s*\(.*\)$/, '');
+  }
+  return optionText.source
+    .replace(/^\^|\$$/g, '')
+    .replace(/\\ /g, ' ')
+    .replace(/\\([()])/g, '$1')
+    .replace(/\\/g, '')
+    .replace(/\s*\(.*\)$/, '');
+}
+
 async function selectFormDropdown(page: Page, fieldLabel: string, optionText: string | RegExp) {
-  await formItem(page, fieldLabel).getByRole('combobox').click();
+  const combobox = formItem(page, fieldLabel).getByRole('combobox');
+  await combobox.click();
+
+  // Searchable selects (edge source/target) support typing to filter virtualized options.
+  const isSearchable = await combobox.evaluate(el => {
+    const input = el as HTMLInputElement;
+    return !input.readOnly && !input.disabled;
+  });
+  if (isSearchable) {
+    const search = optionSearchText(optionText);
+    if (search) {
+      await combobox.pressSequentially(search, { delay: 20 });
+    }
+  }
+
   const option = openDropdownOption(page, optionText).first();
-  await expect(option).toBeVisible();
+  await expect(option).toBeVisible({ timeout: 10_000 });
   await option.click();
   await expect(page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')).toHaveCount(0);
 }
@@ -54,6 +85,18 @@ async function clickAndAwaitPost(page: Page, buttonName: string, pathPattern: Re
   const response = await responsePromise;
   expect(response.status()).toBe(201);
   return response;
+}
+
+async function addNode(
+  page: Page,
+  opts: { id: string; label: string; type?: 'Subnet' | 'Router' | 'Instans' | 'Instance' },
+) {
+  await formItem(page, /ID Node|Node ID/).getByRole('textbox').fill(opts.id);
+  await formItem(page, /^Label$/).getByRole('textbox').fill(opts.label);
+  if (opts.type) {
+    await selectFormDropdown(page, /^Tipe$|^Type$/, new RegExp(`^${opts.type}$`));
+  }
+  await clickAndAwaitPost(page, /Tambah Node|Add Node/, /\/api\/topologies\/[^/]+\/nodes$/);
 }
 
 test.describe('NetAlign dashboard', () => {
@@ -88,8 +131,70 @@ test.describe('NetAlign dashboard', () => {
 
     await selectFormDropdown(page, 'Sumber', `${routerLabel} (ROUTER)`);
     await expect(formItem(page, 'Target').getByRole('combobox')).toBeEnabled();
-    await selectFormDropdown(page, 'Target', 'Subnet-1');
+    await selectFormDropdown(page, 'Target', /Subnet-1/);
 
     await clickAndAwaitPost(page, 'Tambah Edge', /\/api\/topologies\/[^/]+\/edges$/);
+  });
+
+  test('toggles locale to English', async ({ page }) => {
+    await page.locator('.ant-layout-header .ant-select').click();
+    await page
+      .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content')
+      .filter({ hasText: /^EN$/ })
+      .click();
+
+    await expect(page.getByText('Topologies', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Node' })).toBeVisible();
+  });
+
+  test('blocks deleting the protected default topology', async ({ page }) => {
+    // Topology manager delete (first Hapus in the sider).
+    await page.locator('.ant-layout-sider').getByRole('button', { name: 'Hapus', exact: true }).first().click();
+
+    const modal = page.locator('.ant-modal-confirm').filter({ hasText: 'Dilindungi' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByText('Topologi default tidak dapat dihapus.')).toBeVisible();
+    await modal.getByRole('button', { name: 'OK' }).click();
+
+    await expect(topologySelect(page)).toContainText('Default Topology');
+  });
+
+  test('router edge targets only allow subnets', async ({ page }) => {
+    const ts = Date.now();
+    const routerA = `router-a-${ts}`;
+    const routerB = `router-b-${ts}`;
+    const labelA = `RouterA${ts}`;
+    const labelB = `RouterB${ts}`;
+
+    await addNode(page, { id: routerA, label: labelA, type: 'Router' });
+    await addNode(page, { id: routerB, label: labelB, type: 'Router' });
+
+    await selectFormDropdown(page, 'Sumber', `${labelA} (ROUTER)`);
+    const targetBox = formItem(page, 'Target').getByRole('combobox');
+    await expect(targetBox).toBeEnabled();
+    await targetBox.click();
+    await targetBox.pressSequentially('Subnet-1', { delay: 20 });
+
+    const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)');
+    await expect(
+      dropdown.locator('.ant-select-item-option-content').filter({ hasText: /Subnet-1/ }),
+    ).toBeVisible();
+    await expect(
+      dropdown.locator('.ant-select-item-option-content').filter({ hasText: labelB }),
+    ).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+  });
+
+  test('auto-layout button issues batch position update', async ({ page }) => {
+    const positionsPromise = page.waitForResponse(
+      response =>
+        response.request().method() === 'PUT' &&
+        /\/api\/topologies\/[^/]+\/nodes\/positions$/.test(new URL(response.url()).pathname),
+    );
+
+    await page.getByRole('button', { name: 'Auto-layout' }).click();
+    const response = await positionsPromise;
+    expect(response.status()).toBe(200);
   });
 });
