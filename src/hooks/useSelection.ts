@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { TopologyEdge, TopologyNode } from '../../shared/types.ts';
+import {
+  reconcileEdgeSelection,
+  reconcileNodeSelection,
+  toSelectedNodeData,
+} from './selectionUtils.ts';
 
 export interface SelectedNodeData {
   id: string;
@@ -7,13 +12,7 @@ export interface SelectedNodeData {
   type: string;
 }
 
-function toSelectedNodeData(node: TopologyNode): SelectedNodeData {
-  return {
-    id: node.id,
-    label: node.data?.label || node.id,
-    type: node.type,
-  };
-}
+export { toSelectedNodeData } from './selectionUtils.ts';
 
 export interface UseSelectionResult {
   selectedNodeId: string | null;
@@ -49,25 +48,19 @@ export function useSelection(
   }, [activeTopologyId]);
 
   useEffect(() => {
-    if (!selectedNodeId) return;
-    const node = nodes.find(n => n.id === selectedNodeId);
-    if (!node) {
-      setSelectedNodeId(null);
-      setSelectedNodeData(null);
-      return;
+    const next = reconcileNodeSelection(selectedNodeId, nodes);
+    if (next.selectedNodeId !== selectedNodeId) {
+      setSelectedNodeId(next.selectedNodeId);
     }
-    setSelectedNodeData(toSelectedNodeData(node));
+    setSelectedNodeData(next.selectedNodeData);
   }, [nodes, selectedNodeId]);
 
   useEffect(() => {
-    if (!selectedEdgeId) return;
-    const edge = edges.find(e => e.id === selectedEdgeId);
-    if (!edge) {
-      setSelectedEdgeId(null);
-      setSelectedEdgeData(null);
-      return;
+    const next = reconcileEdgeSelection(selectedEdgeId, edges);
+    if (next.selectedEdgeId !== selectedEdgeId) {
+      setSelectedEdgeId(next.selectedEdgeId);
     }
-    setSelectedEdgeData(edge);
+    setSelectedEdgeData(next.selectedEdgeData);
   }, [edges, selectedEdgeId]);
 
   const selectNode = useCallback(
