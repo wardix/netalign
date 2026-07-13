@@ -242,14 +242,110 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({ activeTopologyId, trigger
     };
   }, [elements, onNodeSelect, onEdgeSelect]);
 
+  const handleZoomIn = () => {
+    if (cyRef.current) {
+      cyRef.current.zoom(cyRef.current.zoom() * 1.2);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (cyRef.current) {
+      cyRef.current.zoom(cyRef.current.zoom() / 1.2);
+    }
+  };
+
+  const handleFit = () => {
+    if (cyRef.current) {
+      cyRef.current.fit();
+      cyRef.current.center();
+    }
+  };
+
   return (
-    <CytoscapeComponent
-      elements={elements}
-      style={{ width: '100%', height: '100%' }}
-      stylesheet={styles}
-      layout={{ name: 'preset' }}
-      cy={(cy) => { cyRef.current = cy; }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <CytoscapeComponent
+        elements={elements}
+        style={{ width: '100%', height: '100%' }}
+        stylesheet={styles}
+        layout={{ name: 'preset' }}
+        cy={(cy) => { cyRef.current = cy; }}
+      />
+      <div style={{
+        position: 'absolute',
+        bottom: 20,
+        right: 20,
+        zIndex: 1000,
+        background: 'rgba(255, 255, 255, 0.8)',
+        padding: '6px 10px',
+        borderRadius: 8,
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        backdropFilter: 'blur(4px)',
+        border: '1px solid rgba(0, 0, 0, 0.06)'
+      }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleZoomIn}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 4,
+              border: '1px solid #d9d9d9',
+              background: '#fff',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 0 rgba(0,0,0,0.015)'
+            }}
+            title="Zoom In"
+          >
+            +
+          </button>
+          <button
+            onClick={handleZoomOut}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 4,
+              border: '1px solid #d9d9d9',
+              background: '#fff',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 0 rgba(0,0,0,0.015)'
+            }}
+            title="Zoom Out"
+          >
+            -
+          </button>
+          <button
+            onClick={handleFit}
+            style={{
+              padding: '0 10px',
+              height: 32,
+              borderRadius: 4,
+              border: '1px solid #d9d9d9',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 0 rgba(0,0,0,0.015)'
+            }}
+            title="Fit to Center"
+          >
+            Fit
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
