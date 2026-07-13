@@ -21,6 +21,8 @@ interface TopologySidebarProps {
   onCreateTopology: (name: string) => Promise<boolean>;
   onRenameTopology: (name: string) => Promise<boolean>;
   onDeleteTopology: () => void;
+  onExportTopology: () => Promise<boolean>;
+  onImportTopology: (file: File) => Promise<boolean>;
   onAddNode: (values: {
     nodeId: string;
     nodeType: TopologyNodeTypeValue;
@@ -46,6 +48,8 @@ export const TopologySidebar: React.FC<TopologySidebarProps> = ({
   onCreateTopology,
   onRenameTopology,
   onDeleteTopology,
+  onExportTopology,
+  onImportTopology,
   onAddNode,
   onAddEdge,
   validateEdgeForm,
@@ -73,6 +77,8 @@ export const TopologySidebar: React.FC<TopologySidebarProps> = ({
         onCreateTopology={onCreateTopology}
         onRenameTopology={onRenameTopology}
         onDeleteTopology={onDeleteTopology}
+        onExportTopology={onExportTopology}
+        onImportTopology={onImportTopology}
       />
       <NodePanel onAddNode={onAddNode} />
       <EdgePanel

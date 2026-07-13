@@ -79,6 +79,8 @@ const App: React.FC = () => {
           onCreateTopology={mutations.createTopology}
           onRenameTopology={mutations.renameTopology}
           onDeleteTopology={mutations.deleteTopology}
+          onExportTopology={mutations.exportTopology}
+          onImportTopology={mutations.importTopology}
           onAddNode={mutations.addNode}
           onAddEdge={mutations.addEdge}
           validateEdgeForm={mutations.validateEdgeForm}

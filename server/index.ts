@@ -15,6 +15,7 @@ import type {
   UpdateEdgeBody,
   UpdateNodeBody,
 } from '../shared/types.ts';
+import { parseTopologyImport } from '../shared/topologyImport.ts';
 import { validateRouteId } from './paths.ts';
 import * as topologyStore from './topologyStore.ts';
 import type { Context } from 'hono';
@@ -119,6 +120,36 @@ app.post('/api/topologies', async (c) => {
   } catch (error) {
     console.error('Error creating topology:', error);
     return c.json({ error: 'Failed to create topology' }, 500);
+  }
+});
+
+// 4b. Import a topology document as a new topology (never overwrites existing)
+app.post('/api/topologies/import', async (c) => {
+  try {
+    const body = await c.req.json();
+    const parsed = parseTopologyImport(body);
+    if (!parsed.ok) {
+      return c.json({ error: parsed.error }, 400);
+    }
+
+    // Retry once if generated id collides (extremely unlikely).
+    let topology = parsed.topology;
+    if (topologyStore.topologyExists(topology.id)) {
+      const retry = parseTopologyImport(body);
+      if (!retry.ok) {
+        return c.json({ error: retry.error }, 400);
+      }
+      topology = retry.topology;
+      if (topologyStore.topologyExists(topology.id)) {
+        return c.json({ error: 'Failed to allocate topology id' }, 500);
+      }
+    }
+
+    topologyStore.createTopology(topology);
+    return c.json(topology, 201);
+  } catch (error) {
+    console.error('Error importing topology:', error);
+    return c.json({ error: 'Failed to import topology' }, 500);
   }
 });
 

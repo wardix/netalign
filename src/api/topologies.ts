@@ -29,6 +29,11 @@ export const topologyApi = {
     return apiPost<Topology>('/api/topologies', { name });
   },
 
+  /** Create a new topology from an export/import JSON document. */
+  import(document: unknown): Promise<Topology> {
+    return apiPost<Topology>('/api/topologies/import', document);
+  },
+
   rename(id: string, name: string): Promise<TopologySummary> {
     return apiPatch<TopologySummary>(`/api/topologies/${id}`, { name });
   },

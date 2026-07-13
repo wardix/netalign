@@ -6,6 +6,11 @@ import { useI18n } from '../i18n/I18nProvider.tsx';
 import { translateApiError } from '../i18n/translations.ts';
 import { getGatewayValidationError } from '../../shared/edgeGateway.ts';
 import { validateEdgeBetweenNodes } from '../../shared/edgeValidation.ts';
+import {
+  parseTopologyImport,
+  sanitizeExportFilename,
+  toExportDocument,
+} from '../../shared/topologyImport.ts';
 import type { TopologyEdge, TopologyNode, TopologyNodeTypeValue, TopologySummary } from '../../shared/types.ts';
 import type { SelectedNodeData } from './useSelection.ts';
 
@@ -45,6 +50,8 @@ export interface UseTopologyMutationsResult {
   addEdge: (values: { source: string; target: string; gateway?: string }) => Promise<boolean>;
   updateEdgeGateway: (values: { gateway?: string }) => Promise<void>;
   deleteEdge: (edgeId: string) => void;
+  exportTopology: () => Promise<boolean>;
+  importTopology: (file: File) => Promise<boolean>;
 }
 
 export function useTopologyMutations(options: UseTopologyMutationsOptions): UseTopologyMutationsResult {
@@ -340,6 +347,65 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     [activeTopologyId, bumpTopology, clearEdgeSelection, showApiError, t],
   );
 
+  const exportTopology = useCallback(async () => {
+    if (!activeTopologyId) {
+      message.warning(t('common.selectTopologyFirst'));
+      return false;
+    }
+
+    try {
+      const topology = await topologyApi.get(activeTopologyId);
+      const document = toExportDocument(topology);
+      const blob = new Blob([JSON.stringify(document, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = sanitizeExportFilename(topology.name);
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      message.success(t('topologies.exported', { name: topology.name }));
+      return true;
+    } catch (err) {
+      showApiError(err, 'topologies.exportFailed');
+      return false;
+    }
+  }, [activeTopologyId, showApiError, t]);
+
+  const importTopology = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        let raw: unknown;
+        try {
+          raw = JSON.parse(text) as unknown;
+        } catch {
+          message.error(t('topologies.importInvalidJson'));
+          return false;
+        }
+
+        const clientCheck = parseTopologyImport(raw);
+        if (!clientCheck.ok) {
+          message.error(translateApiError(clientCheck.error, t));
+          return false;
+        }
+
+        const imported = await topologyApi.import(raw);
+        message.success(t('topologies.imported', { name: imported.name }));
+        await refreshTopologies();
+        setActiveTopologyId(imported.id);
+        return true;
+      } catch (err) {
+        showApiError(err, 'topologies.importFailed');
+        return false;
+      }
+    },
+    [refreshTopologies, setActiveTopologyId, showApiError, t],
+  );
+
   return {
     createTopology,
     renameTopology,
@@ -353,5 +419,7 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     addEdge,
     updateEdgeGateway,
     deleteEdge,
+    exportTopology,
+    importTopology,
   };
 }
