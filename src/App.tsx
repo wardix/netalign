@@ -549,8 +549,8 @@ const App: React.FC = () => {
           backgroundSize: '24px 24px'
         }}>
           <TopologyGraph
-            activeTopologyId={activeTopologyId}
-            triggerRefresh={refreshKey}
+            nodes={activeNodes}
+            edges={activeEdges}
             onNodeSelect={handleNodeSelect}
             onEdgeSelect={handleEdgeSelect}
           />
