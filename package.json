@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:all": "concurrently -k -n server,web -c blue,magenta \"bun run server\" \"bun run dev\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "bun test --preload ./server/testPreload.ts --preload ./server/domPreload.ts shared server src/history src/api.test.ts src/api/client.test.ts src/i18n/translations.test.ts src/hooks/selectionUtils.test.ts src/components/GraphErrorBoundary.test.tsx",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
+    "db:reset": "bun run scripts/db-reset.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "install:playwright": "playwright install chromium"
@@ -28,6 +30,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
     "happy-dom": "^20.10.6",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
