@@ -1,12 +1,7 @@
 import { isValidEdgeConnection } from './edgeValidation.ts';
-import type { NodePosition } from './nodePosition.ts';
+import type { TopologyNode } from './types.ts';
 
-export interface TopologyNode {
-  id: string;
-  type: string;
-  data?: { label?: string };
-  position?: NodePosition;
-}
+export type { TopologyNode } from './types.ts';
 
 export function getNodeLabel(node: TopologyNode): string {
   return node.data?.label || node.id;

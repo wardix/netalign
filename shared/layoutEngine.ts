@@ -1,13 +1,7 @@
 import { buildEdgeId } from './edgeIds.ts';
 import type { NodePosition } from './nodePosition.ts';
 import { getNodeLabel, type TopologyNode } from './topologyNodes.ts';
-
-export interface LayoutEdge {
-  id: string;
-  source: string;
-  target: string;
-  gateway?: string;
-}
+import type { TopologyEdge } from './types.ts';
 
 export interface CytoscapeElement {
   data: Record<string, unknown>;
@@ -119,7 +113,7 @@ function buildBaseStyles(): CytoscapeStyle[] {
 
 export function computeLayout(
   nodes: TopologyNode[],
-  edges: LayoutEdge[],
+  edges: TopologyEdge[],
   positionOverrides?: Record<string, NodePosition>,
 ): LayoutResult {
   const subnets = nodes.filter(n => n.type === 'subnet');
@@ -358,7 +352,7 @@ export function applySavedPositions(
 
 export function buildSubnetEndpoints(
   nodes: TopologyNode[],
-  edges: LayoutEdge[],
+  edges: TopologyEdge[],
   pos: Record<string, NodePosition>,
 ): Record<string, Record<string, { side: string; offset: number }>> {
   const subnets = nodes.filter(n => n.type === 'subnet');
@@ -401,7 +395,7 @@ export function buildSubnetEndpoints(
 export function getConnectedPeerIds(
   nodeId: string,
   nodeType: string,
-  edges: LayoutEdge[],
+  edges: TopologyEdge[],
   nodes: TopologyNode[],
 ): string[] {
   if (nodeType !== 'subnet') return [];

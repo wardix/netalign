@@ -13,24 +13,13 @@ import {
   sortNodesByLabel,
   type TopologyNode,
 } from '../shared/topologyNodes.ts';
+import type { TopologyEdge, TopologySummary } from '../shared/types.ts';
 
 const { Header, Sider, Content } = Layout;
 
-interface TopologyInfo {
-  id: string;
-  name: string;
-}
-
-interface TopologyEdge {
-  id: string;
-  source: string;
-  target: string;
-  gateway?: string;
-}
-
 const App: React.FC = () => {
   const { t, locale, setLocale } = useI18n();
-  const [topologies, setTopologies] = useState<TopologyInfo[]>([]);
+  const [topologies, setTopologies] = useState<TopologySummary[]>([]);
   const [activeTopologyId, setActiveTopologyId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -55,7 +44,7 @@ const App: React.FC = () => {
   const loadTopologies = (selectId?: string) => {
     fetch(`${API_BASE}/api/topologies`)
       .then(res => res.json())
-      .then((data: TopologyInfo[]) => {
+      .then((data: TopologySummary[]) => {
         setTopologies(data);
         const targetId = selectId || data[0]?.id || null;
         setActiveTopologyId(targetId);
