@@ -12,7 +12,7 @@
     "server": "bun run server/index.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "install:playwright": "playwright install"
+    "install:playwright": "playwright install chromium"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",

@@ -377,10 +377,20 @@ const App: React.FC = () => {
           </Space>
 
           <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Node</Divider>
-          <Form form={nodeForm} layout="vertical" onFinish={addNode} style={{ marginBottom: 12 }}>
-            <Form.Item name="nodeId" label="Node ID" rules={[{ required: true }]}> <Input /> </Form.Item>
-            <Form.Item name="nodeLabel" label="Label" rules={[{ required: true }]}> <Input /> </Form.Item>
-            <Form.Item name="nodeType" label="Type" rules={[{ required: true }]} initialValue="subnet">
+          <Form
+            form={nodeForm}
+            layout="vertical"
+            onFinish={addNode}
+            initialValues={{ nodeType: 'subnet' }}
+            style={{ marginBottom: 12 }}
+          >
+            <Form.Item name="nodeId" label="Node ID" rules={[{ required: true }]}>
+              <Input id="nodeId" />
+            </Form.Item>
+            <Form.Item name="nodeLabel" label="Label" rules={[{ required: true }]}>
+              <Input id="nodeLabel" />
+            </Form.Item>
+            <Form.Item name="nodeType" label="Type" rules={[{ required: true }]}>
               <Select>
                 <Select.Option value="subnet">Subnet</Select.Option>
                 <Select.Option value="router">Router</Select.Option>
