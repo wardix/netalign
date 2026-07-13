@@ -207,7 +207,17 @@ All requests are prefixed with `/api`. Vite proxies `/api/*` from port 3000 to t
 | `POST` | `/api/topologies` | Create topology. Body: `{ name }` |
 | `PATCH` | `/api/topologies/:id` | Rename topology. Body: `{ name }` |
 | `DELETE` | `/api/topologies/:id` | Delete topology |
-| `POST` | `/api/topologies/:id/delete` | Delete topology (legacy alias) |
+| `POST` | `/api/topologies/:id/delete` | **Deprecated** alias for delete (returns `Deprecation` / `Sunset` headers; prefer `DELETE`) |
+
+### Error responses
+
+Failed requests return:
+
+```json
+{ "error": "Human-readable English message", "code": "STABLE_ERROR_CODE" }
+```
+
+Codes are defined in `shared/apiErrors.ts` (e.g. `TOPOLOGY_NOT_FOUND`, `EDGE_INVALID_CONNECTION`, `TOPOLOGY_PROTECTED`). Clients should branch on `code`; `error` remains for debugging and logs.
 
 ### Node Management
 

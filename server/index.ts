@@ -22,6 +22,11 @@ import {
   isProtectedTopologyId,
   PROTECTED_TOPOLOGY_DELETE_ERROR,
 } from '../shared/protectedTopologies.ts';
+import {
+  buildApiError,
+  codeFromErrorMessage,
+  type ApiErrorCode,
+} from '../shared/apiErrors.ts';
 import { createCorsOriginResolver } from './corsConfig.ts';
 import { getLiveness, getReadiness } from './health.ts';
 import {
@@ -90,10 +95,24 @@ app.get('/api/ready', c => {
   return c.json(body, body.status === 'ready' ? 200 : 503);
 });
 
+function jsonError(
+  c: Context,
+  status: 400 | 403 | 404 | 500 | 503,
+  code: ApiErrorCode,
+  message?: string,
+) {
+  return c.json(buildApiError(code, message), status);
+}
+
+function jsonErrorFromMessage(c: Context, status: 400 | 403 | 404 | 500, message: string) {
+  const code = codeFromErrorMessage(message) ?? 'INTERNAL_ERROR';
+  return jsonError(c, status, code, message);
+}
+
 function invalidIdResponse(c: Context, id: string) {
   const validation = validateRouteId(id);
   if (!validation.ok) {
-    return c.json({ error: validation.error }, 400);
+    return jsonError(c, 400, 'INVALID_ID', validation.error);
   }
   return null;
 }
@@ -101,13 +120,13 @@ function invalidIdResponse(c: Context, id: string) {
 function topologyIdOrResponse(c: Context, id: string) {
   const validation = validateRouteId(id);
   if (!validation.ok) {
-    return { response: c.json({ error: validation.error }, 400) };
+    return { response: jsonError(c, 400, 'INVALID_ID', validation.error) };
   }
   return { topologyId: id };
 }
 
 function topologyNotFound(c: Context) {
-  return c.json({ error: 'Topology not found' }, 404);
+  return jsonError(c, 404, 'TOPOLOGY_NOT_FOUND');
 }
 
 // 1. Get all topologies
@@ -116,7 +135,7 @@ app.get('/api/topologies', async (c) => {
     return c.json(topologyStore.listTopologies());
   } catch (error) {
     logRouteError('Error reading topologies', error, c);
-    return c.json({ error: 'Failed to read topologies' }, 500);
+    return jsonError(c, 500, 'TOPOLOGY_LIST_FAILED');
   }
 });
 
@@ -132,7 +151,7 @@ app.get('/api/topologies/:id', async (c) => {
     return c.json(data);
   } catch (error) {
     logRouteError('Error fetching topology', error, c);
-    return c.json({ error: 'Failed to read topology file' }, 500);
+    return jsonError(c, 500, 'TOPOLOGY_READ_FAILED');
   }
 });
 
@@ -151,7 +170,7 @@ app.patch('/api/topologies/:id', async (c) => {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
 
     if (!name) {
-      return c.json({ error: 'Name is required' }, 400);
+      return jsonError(c, 400, 'TOPOLOGY_NAME_REQUIRED');
     }
 
     const updated = topologyStore.renameTopology(idResult.topologyId, name);
@@ -159,7 +178,7 @@ app.patch('/api/topologies/:id', async (c) => {
     return c.json(updated satisfies TopologySummary);
   } catch (error) {
     logRouteError('Error updating topology', error, c);
-    return c.json({ error: 'Failed to update topology' }, 500);
+    return jsonError(c, 500, 'TOPOLOGY_UPDATE_FAILED');
   }
 });
 
@@ -171,7 +190,7 @@ app.post('/api/topologies', async (c) => {
     const id = `topology-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const idValidation = validateRouteId(id);
     if (!idValidation.ok) {
-      return c.json({ error: idValidation.error }, 400);
+      return jsonError(c, 400, 'INVALID_ID', idValidation.error);
     }
 
     const newTopology: Topology = {
@@ -185,7 +204,7 @@ app.post('/api/topologies', async (c) => {
     return c.json(newTopology, 201);
   } catch (error) {
     logRouteError('Error creating topology', error, c);
-    return c.json({ error: 'Failed to create topology' }, 500);
+    return jsonError(c, 500, 'TOPOLOGY_CREATE_FAILED');
   }
 });
 
@@ -195,7 +214,7 @@ app.post('/api/topologies/import', async (c) => {
     const body = await c.req.json();
     const parsed = parseTopologyImport(body);
     if (!parsed.ok) {
-      return c.json({ error: parsed.error }, 400);
+      return jsonErrorFromMessage(c, 400, parsed.error);
     }
 
     // Retry once if generated id collides (extremely unlikely).
@@ -203,11 +222,11 @@ app.post('/api/topologies/import', async (c) => {
     if (topologyStore.topologyExists(topology.id)) {
       const retry = parseTopologyImport(body);
       if (!retry.ok) {
-        return c.json({ error: retry.error }, 400);
+        return jsonErrorFromMessage(c, 400, retry.error);
       }
       topology = retry.topology;
       if (topologyStore.topologyExists(topology.id)) {
-        return c.json({ error: 'Failed to allocate topology id' }, 500);
+        return jsonError(c, 500, 'TOPOLOGY_ID_ALLOCATION_FAILED');
       }
     }
 
@@ -215,19 +234,27 @@ app.post('/api/topologies/import', async (c) => {
     return c.json(topology, 201);
   } catch (error) {
     logRouteError('Error importing topology', error, c);
-    return c.json({ error: 'Failed to import topology' }, 500);
+    return jsonError(c, 500, 'IMPORT_FAILED');
   }
 });
 
 function refuseProtectedTopologyDelete(c: Context, topologyId: string) {
   if (isProtectedTopologyId(topologyId, protectedTopologyIds)) {
-    return c.json({ error: PROTECTED_TOPOLOGY_DELETE_ERROR }, 403);
+    return jsonError(c, 403, 'TOPOLOGY_PROTECTED', PROTECTED_TOPOLOGY_DELETE_ERROR);
   }
   return null;
 }
 
-// 5. Delete a topology
+// 5. Delete a topology (legacy alias — prefer DELETE /api/topologies/:id)
 app.post('/api/topologies/:id/delete', async (c) => {
+  c.header('Deprecation', 'true');
+  c.header('Sunset', 'Sat, 01 Aug 2026 00:00:00 GMT');
+  c.header('Link', '</api/topologies/{id}>; rel="successor-version"');
+  logger.warn('deprecated_delete_alias', {
+    path: new URL(c.req.url).pathname,
+    requestId: c.res.headers.get('x-request-id') ?? undefined,
+  });
+
   const id = c.req.param('id');
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
@@ -241,10 +268,15 @@ app.post('/api/topologies/:id/delete', async (c) => {
 
   try {
     topologyStore.deleteTopology(idResult.topologyId);
-    return c.json({ success: true, message: `Deleted topology ${id}` });
+    return c.json({
+      success: true,
+      message: `Deleted topology ${id}`,
+      deprecated: true,
+      prefer: 'DELETE /api/topologies/:id',
+    });
   } catch (error) {
     logRouteError('Error deleting topology', error, c);
-    return c.json({ error: 'Failed to delete topology file' }, 500);
+    return jsonError(c, 500, 'TOPOLOGY_DELETE_FAILED');
   }
 });
 
@@ -265,7 +297,7 @@ app.delete('/api/topologies/:id', async (c) => {
     return c.json({ success: true, message: `Deleted topology ${id}` });
   } catch (error) {
     logRouteError('Error deleting topology', error, c);
-    return c.json({ error: 'Failed to delete topology file' }, 500);
+    return jsonError(c, 500, 'TOPOLOGY_DELETE_FAILED');
   }
 });
 
@@ -284,14 +316,14 @@ app.post('/api/topologies/:id/nodes', async (c) => {
     const { nodeId, type, label } = body;
 
     if (!nodeId || !type) {
-      return c.json({ error: 'Missing nodeId or type' }, 400);
+      return jsonError(c, 400, 'NODE_ID_REQUIRED');
     }
 
     const invalidNodeId = invalidIdResponse(c, nodeId);
     if (invalidNodeId) return invalidNodeId;
 
     if (topologyStore.nodeExists(idResult.topologyId, nodeId)) {
-      return c.json({ error: 'Node ID already exists' }, 400);
+      return jsonError(c, 400, 'NODE_ID_EXISTS');
     }
 
     const newNode: TopologyNode = {
@@ -304,7 +336,7 @@ app.post('/api/topologies/:id/nodes', async (c) => {
     return c.json(newNode, 201);
   } catch (error) {
     logRouteError('Error adding node', error, c);
-    return c.json({ error: 'Failed to add node' }, 500);
+    return jsonError(c, 500, 'NODE_ADD_FAILED');
   }
 });
 
@@ -321,13 +353,13 @@ app.put('/api/topologies/:id/nodes/positions', async (c) => {
   try {
     const body = (await c.req.json()) as BatchNodePositionsBody;
     if (!body || !Array.isArray(body.updates)) {
-      return c.json({ error: 'Body must include an updates array' }, 400);
+      return jsonError(c, 400, 'NODE_POSITIONS_REQUIRED');
     }
 
     const parsed: { nodeId: string; position: { x: number; y: number } }[] = [];
     for (const item of body.updates) {
       if (!item || typeof item !== 'object') {
-        return c.json({ error: 'Each update must be an object with nodeId and position' }, 400);
+        return jsonError(c, 400, 'NODE_POSITIONS_INVALID');
       }
       const nodeId = typeof item.nodeId === 'string' ? item.nodeId : '';
       const invalidNode = invalidIdResponse(c, nodeId);
@@ -335,7 +367,7 @@ app.put('/api/topologies/:id/nodes/positions', async (c) => {
 
       const positionError = getPositionValidationError(item.position);
       if (positionError) {
-        return c.json({ error: positionError }, 400);
+        return jsonErrorFromMessage(c, 400, positionError);
       }
       parsed.push({ nodeId, position: parseNodePosition(item.position)! });
     }
@@ -343,12 +375,12 @@ app.put('/api/topologies/:id/nodes/positions', async (c) => {
     const result = topologyStore.updateNodePositions(idResult.topologyId, parsed);
     if (!result.ok) {
       const status = result.error.startsWith('Node not found') ? 404 : 400;
-      return c.json({ error: result.error }, status);
+      return jsonErrorFromMessage(c, status === 404 ? 404 : 400, result.error);
     }
     return c.json({ nodes: result.nodes });
   } catch (error) {
     logRouteError('Error batch-updating node positions', error, c);
-    return c.json({ error: 'Failed to update node positions' }, 500);
+    return jsonError(c, 500, 'NODE_POSITIONS_UPDATE_FAILED');
   }
 });
 
@@ -372,11 +404,11 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
     const positionProvided = Object.prototype.hasOwnProperty.call(body, 'position');
 
     if (!labelProvided && !positionProvided) {
-      return c.json({ error: 'Label or position is required' }, 400);
+      return jsonError(c, 400, 'NODE_UPDATE_FIELDS_REQUIRED');
     }
 
     if (!topologyStore.nodeExists(idResult.topologyId, nodeId)) {
-      return c.json({ error: 'Node not found' }, 404);
+      return jsonError(c, 404, 'NODE_NOT_FOUND');
     }
 
     let node: TopologyNode | null = topologyStore.getNode(idResult.topologyId, nodeId);
@@ -384,7 +416,7 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
     if (labelProvided) {
       const label = typeof body.label === 'string' ? body.label.trim() : '';
       if (!label) {
-        return c.json({ error: 'Label is required' }, 400);
+        return jsonError(c, 400, 'NODE_LABEL_REQUIRED');
       }
       node = topologyStore.updateNodeLabel(idResult.topologyId, nodeId, label);
     }
@@ -392,17 +424,17 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
     if (positionProvided) {
       const positionError = getPositionValidationError(body.position);
       if (positionError) {
-        return c.json({ error: positionError }, 400);
+        return jsonErrorFromMessage(c, 400, positionError);
       }
       const position = parseNodePosition(body.position)!;
       node = topologyStore.updateNodePosition(idResult.topologyId, nodeId, position);
     }
 
-    if (!node) return c.json({ error: 'Node not found' }, 404);
+    if (!node) return jsonError(c, 404, 'NODE_NOT_FOUND');
     return c.json(node);
   } catch (error) {
     logRouteError('Error updating node', error, c);
-    return c.json({ error: 'Failed to update node' }, 500);
+    return jsonError(c, 500, 'NODE_UPDATE_FAILED');
   }
 });
 
@@ -423,13 +455,13 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   try {
     const deleted = topologyStore.deleteNode(idResult.topologyId, nodeId);
     if (!deleted) {
-      return c.json({ error: 'Node not found' }, 404);
+      return jsonError(c, 404, 'NODE_NOT_FOUND');
     }
 
     return c.json({ success: true, message: `Node ${nodeId} deleted with connections` });
   } catch (error) {
     logRouteError('Error deleting node', error, c);
-    return c.json({ error: 'Failed to delete node' }, 500);
+    return jsonError(c, 500, 'NODE_DELETE_FAILED');
   }
 });
 
@@ -448,36 +480,36 @@ app.post('/api/topologies/:id/edges', async (c) => {
     const { source, target } = body;
 
     if (!source || !target) {
-      return c.json({ error: 'Missing source or target' }, 400);
+      return jsonError(c, 400, 'EDGE_ENDPOINTS_REQUIRED');
     }
 
     if (source === target) {
-      return c.json({ error: 'Source and target must be different nodes' }, 400);
+      return jsonError(c, 400, 'EDGE_SAME_NODE');
     }
 
     const sourceNode = topologyStore.getNode(idResult.topologyId, source);
     const targetNode = topologyStore.getNode(idResult.topologyId, target);
 
     if (!sourceNode || !targetNode) {
-      return c.json({ error: 'Source or Target node does not exist' }, 400);
+      return jsonError(c, 400, 'EDGE_NODES_MISSING');
     }
 
     const topologyError = validateEdgeBetweenNodes(sourceNode, targetNode);
     if (topologyError) {
-      return c.json({ error: topologyError }, 400);
+      return jsonErrorFromMessage(c, 400, topologyError);
     }
 
     const edgeId = buildEdgeId(source, target);
 
     if (topologyStore.edgeExists(idResult.topologyId, edgeId)) {
-      return c.json({ error: 'Edge already exists between these nodes' }, 400);
+      return jsonError(c, 400, 'EDGE_DUPLICATE');
     }
 
     const gateway = normalizeGateway(body.gateway);
     if (gateway) {
       const gatewayError = getGatewayValidationError(gateway);
       if (gatewayError) {
-        return c.json({ error: gatewayError }, 400);
+        return jsonErrorFromMessage(c, 400, gatewayError);
       }
     }
 
@@ -492,7 +524,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
     return c.json(newEdge, 201);
   } catch (error) {
     logRouteError('Error adding edge', error, c);
-    return c.json({ error: 'Failed to add edge' }, 500);
+    return jsonError(c, 500, 'EDGE_ADD_FAILED');
   }
 });
 
@@ -516,7 +548,7 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
     if (gateway) {
       const gatewayError = getGatewayValidationError(gateway);
       if (gatewayError) {
-        return c.json({ error: gatewayError }, 400);
+        return jsonErrorFromMessage(c, 400, gatewayError);
       }
     }
 
@@ -527,13 +559,13 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
     );
 
     if (!edge) {
-      return c.json({ error: 'Edge not found' }, 404);
+      return jsonError(c, 404, 'EDGE_NOT_FOUND');
     }
 
     return c.json(edge);
   } catch (error) {
     logRouteError('Error updating edge', error, c);
-    return c.json({ error: 'Failed to update edge' }, 500);
+    return jsonError(c, 500, 'EDGE_UPDATE_FAILED');
   }
 });
 
@@ -554,13 +586,13 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   try {
     const deleted = topologyStore.deleteEdge(idResult.topologyId, edgeId);
     if (!deleted) {
-      return c.json({ error: 'Edge not found' }, 404);
+      return jsonError(c, 404, 'EDGE_NOT_FOUND');
     }
 
     return c.json({ success: true, message: `Edge ${edgeId} deleted` });
   } catch (error) {
     logRouteError('Error deleting edge', error, c);
-    return c.json({ error: 'Failed to delete edge' }, 500);
+    return jsonError(c, 500, 'EDGE_DELETE_FAILED');
   }
 });
 

@@ -34,6 +34,7 @@ describe('topology ID path traversal protection', () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.error).toBe('Invalid ID format');
+    expect(body.code).toBe('INVALID_ID');
   });
 
   test('rejects traversal in DELETE /api/topologies/:id', async () => {
