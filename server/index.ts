@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { readdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { buildEdgeId } from '../shared/edgeIds.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import { resolveTopologyFilePath, validateRouteId } from './paths.ts';
 import type { Context } from 'hono';
@@ -76,7 +77,37 @@ app.get('/api/topologies/:id', async (c) => {
   }
 });
 
-// 3. Create a new topology
+// 3. Update a topology (rename)
+app.patch('/api/topologies/:id', async (c) => {
+  const id = c.req.param('id');
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
+
+  if (!(await Bun.file(filePath).exists())) {
+    return c.json({ error: 'Topology not found' }, 404);
+  }
+
+  try {
+    const body = await c.req.json();
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+
+    if (!name) {
+      return c.json({ error: 'Name is required' }, 400);
+    }
+
+    const data = await Bun.file(filePath).json();
+    data.name = name;
+
+    await Bun.write(filePath, JSON.stringify(data, null, 2));
+    return c.json({ id: data.id, name: data.name });
+  } catch (error) {
+    console.error('Error updating topology:', error);
+    return c.json({ error: 'Failed to update topology' }, 500);
+  }
+});
+
+// 4. Create a new topology
 app.post('/api/topologies', async (c) => {
   try {
     const body = await c.req.json();
@@ -103,7 +134,7 @@ app.post('/api/topologies', async (c) => {
   }
 });
 
-// 4. Delete a topology
+// 5. Delete a topology
 app.post('/api/topologies/:id/delete', async (c) => {
   // Use POST for delete from some clients, but we also support DELETE
   const id = c.req.param('id');
@@ -144,7 +175,7 @@ app.delete('/api/topologies/:id', async (c) => {
   }
 });
 
-// 5. Add a node to a topology
+// 6. Add a node to a topology
 app.post('/api/topologies/:id/nodes', async (c) => {
   const id = c.req.param('id');
   const pathResult = topologyPathOrResponse(c, id);
@@ -189,7 +220,7 @@ app.post('/api/topologies/:id/nodes', async (c) => {
   }
 });
 
-// 6. Update a node in a topology
+// 7. Update a node in a topology
 app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
   const id = c.req.param('id');
   const nodeId = c.req.param('nodeId');
@@ -229,7 +260,7 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
   }
 });
 
-// 7. Delete a node from a topology (and all connected edges)
+// 8. Delete a node from a topology (and all connected edges)
 app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   const id = c.req.param('id');
   const nodeId = c.req.param('nodeId');
@@ -265,7 +296,7 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   }
 });
 
-// 8. Add an edge to a topology
+// 9. Add an edge to a topology
 app.post('/api/topologies/:id/edges', async (c) => {
   const id = c.req.param('id');
   const pathResult = topologyPathOrResponse(c, id);
@@ -302,7 +333,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
       return c.json({ error: topologyError }, 400);
     }
 
-    const edgeId = `e-${source}-${target}`;
+    const edgeId = buildEdgeId(source, target);
 
     // Check duplicate edge ID
     if (data.edges.some((e: any) => e.id === edgeId)) {
@@ -325,7 +356,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
   }
 });
 
-// 9. Delete an edge from a topology
+// 10. Delete an edge from a topology
 app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   const id = c.req.param('id');
   const edgeId = c.req.param('edgeId');
