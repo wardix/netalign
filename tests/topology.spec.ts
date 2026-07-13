@@ -198,6 +198,20 @@ test.describe('NetAlign dashboard', () => {
     expect(response.status()).toBe(200);
   });
 
+  test('collapses sidebar panel while graph stays visible', async ({ page }) => {
+    await expect(page.getByTestId('topology-sidebar-sider')).toBeVisible();
+    await expect(page.locator('.ant-layout-content')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Sembunyikan' }).click();
+    await expect(page.getByRole('button', { name: 'Panel' })).toBeVisible();
+    // Zero-width collapsed sider: panels not interactable; canvas still present.
+    await expect(page.locator('.ant-layout-content')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Panel' }).click();
+    await expect(page.getByRole('button', { name: 'Sembunyikan' })).toBeVisible();
+    await expect(page.locator('.ant-layout-sider .ant-select').first()).toBeVisible();
+  });
+
   test('empty topology shows guided wizard and sample scaffold', async ({ page }) => {
     await page.getByRole('button', { name: 'Baru' }).click();
     const nameInput = page.locator('.ant-modal-confirm .ant-form-item').filter({

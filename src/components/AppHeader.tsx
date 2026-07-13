@@ -9,6 +9,10 @@ interface AppHeaderProps {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  /** When true, show control to open the topology panel (collapsed sider / mobile drawer). */
+  showPanelToggle?: boolean;
+  panelOpen?: boolean;
+  onTogglePanel?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -16,6 +20,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   canRedo = false,
   onUndo,
   onRedo,
+  showPanelToggle = false,
+  panelOpen = true,
+  onTogglePanel,
 }) => {
   const { t, locale, setLocale } = useI18n();
   const isMac =
@@ -34,11 +41,27 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
+        gap: 12,
+        paddingInline: 16,
+        minHeight: 64,
       }}
     >
-      <span>{t('app.title')}</span>
-      <Space size={8} style={{ marginLeft: 8 }}>
+      {showPanelToggle && onTogglePanel && (
+        <Tooltip title={panelOpen ? t('layout.hidePanel') : t('layout.showPanel')}>
+          <Button
+            size="middle"
+            type={panelOpen ? 'default' : 'primary'}
+            onClick={onTogglePanel}
+            aria-expanded={panelOpen}
+            aria-controls="topology-sidebar"
+            style={{ minWidth: 44, minHeight: 36 }}
+          >
+            {panelOpen ? t('layout.hidePanel') : t('layout.showPanel')}
+          </Button>
+        </Tooltip>
+      )}
+      <span style={{ whiteSpace: 'nowrap' }}>{t('app.title')}</span>
+      <Space size={8} style={{ marginLeft: 4 }} wrap>
         <Tooltip title={`${t('history.undo')} (${undoShortcut})`}>
           <Button size="small" disabled={!canUndo || !onUndo} onClick={onUndo}>
             {t('history.undo')}
