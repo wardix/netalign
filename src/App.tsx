@@ -1,22 +1,14 @@
-import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
-
-import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions, Spin } from 'antd';
-import { getApiErrorMessage } from './api/client.ts';
-import { topologyApi } from './api/topologies.ts';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { Layout, message, Spin } from 'antd';
 import { useTopologies } from './hooks/useTopologies.ts';
 import { useTopology } from './hooks/useTopology.ts';
+import { useSelection } from './hooks/useSelection.ts';
+import { useTopologyMutations } from './hooks/useTopologyMutations.ts';
 import { useI18n } from './i18n/I18nProvider.tsx';
-import { translateApiError } from './i18n/translations.ts';
-import { getGatewayValidationError } from '../shared/edgeGateway.ts';
-import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
-import {
-  formatNodeOptionLabel,
-  getValidTargetNodes,
-  sortNodesByLabel,
-} from '../shared/topologyNodes.ts';
-import type { TopologyEdge, TopologyNodeTypeValue } from '../shared/types.ts';
+import { AppHeader } from './components/AppHeader.tsx';
+import { TopologySidebar } from './components/TopologySidebar.tsx';
 
-const { Header, Sider, Content } = Layout;
+const { Content } = Layout;
 
 const TopologyGraph = lazy(() => import('./components/TopologyGraph'));
 
@@ -29,7 +21,7 @@ const graphFallbackStyle: React.CSSProperties = {
 };
 
 const App: React.FC = () => {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const { topologies, error: topologiesError, refresh: refreshTopologies } = useTopologies(
     t('topologies.loadFailed'),
   );
@@ -41,19 +33,23 @@ const App: React.FC = () => {
     loading: topologyLoading,
     error: topologyError,
   } = useTopology(activeTopologyId, refreshKey, t('canvas.loadFailedDetail'));
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [selectedNodeData, setSelectedNodeData] = useState<{
-    id: string;
-    label: string;
-    type: string;
-  } | null>(null);
-  const [selectedEdgeData, setSelectedEdgeData] = useState<TopologyEdge | null>(null);
-  const [topoForm] = Form.useForm();
-  const [nodeForm] = Form.useForm();
-  const [edgeForm] = Form.useForm();
-  const [nodeDetailForm] = Form.useForm();
-  const [edgeDetailForm] = Form.useForm();
+
+  const selection = useSelection(activeTopologyId, activeNodes, activeEdges);
+  const bumpTopology = () => setRefreshKey(k => k + 1);
+
+  const mutations = useTopologyMutations({
+    activeTopologyId,
+    setActiveTopologyId,
+    nodes: activeNodes,
+    selectedNodeData: selection.selectedNodeData,
+    selectedEdgeData: selection.selectedEdgeData,
+    refreshTopologies,
+    bumpTopology,
+    clearNodeSelection: selection.clearNodeSelection,
+    clearEdgeSelection: selection.clearEdgeSelection,
+    setSelectedNodeData: selection.setSelectedNodeData,
+    setSelectedEdgeData: selection.setSelectedEdgeData,
+  });
 
   useEffect(() => {
     if (topologiesError) {
@@ -67,554 +63,38 @@ const App: React.FC = () => {
     }
   }, [topologies, activeTopologyId]);
 
-  useEffect(() => {
-    setSelectedNodeId(null);
-    setSelectedNodeData(null);
-    setSelectedEdgeId(null);
-    setSelectedEdgeData(null);
-  }, [activeTopologyId]);
-
-  useEffect(() => {
-    edgeForm.resetFields();
-  }, [activeTopologyId, edgeForm]);
-
-  useEffect(() => {
-    if (!selectedNodeData) {
-      nodeDetailForm.resetFields();
-      return;
-    }
-    nodeDetailForm.setFieldsValue({ label: selectedNodeData.label });
-  }, [selectedNodeData, nodeDetailForm]);
-
-  useEffect(() => {
-    if (!selectedNodeId) return;
-    const node = activeNodes.find(n => n.id === selectedNodeId);
-    if (!node) {
-      setSelectedNodeId(null);
-      setSelectedNodeData(null);
-      return;
-    }
-    setSelectedNodeData({
-      id: node.id,
-      label: node.data?.label || node.id,
-      type: node.type,
-    });
-  }, [activeNodes, selectedNodeId]);
-
-  useEffect(() => {
-    if (!selectedEdgeId) return;
-    const edge = activeEdges.find(e => e.id === selectedEdgeId);
-    if (!edge) {
-      setSelectedEdgeId(null);
-      setSelectedEdgeData(null);
-      return;
-    }
-    setSelectedEdgeData(edge);
-  }, [activeEdges, selectedEdgeId]);
-
-  useEffect(() => {
-    if (!selectedEdgeData) {
-      edgeDetailForm.resetFields();
-      return;
-    }
-    edgeDetailForm.setFieldsValue({ gateway: selectedEdgeData.gateway || '' });
-  }, [selectedEdgeData, edgeDetailForm]);
-
-  const edgeSource = Form.useWatch('source', edgeForm);
-
-  const sourceOptions = useMemo(
-    () =>
-      sortNodesByLabel(activeNodes).map(node => ({
-        value: node.id,
-        label: formatNodeOptionLabel(node),
-      })),
-    [activeNodes],
-  );
-
-  const targetOptions = useMemo(
-    () =>
-      getValidTargetNodes(edgeSource, activeNodes).map(node => ({
-        value: node.id,
-        label: formatNodeOptionLabel(node),
-      })),
-    [edgeSource, activeNodes],
-  );
-
-  const bumpTopology = () => setRefreshKey(k => k + 1);
-
-  const handleNodeSelect = (nodeId: string) => {
-    const node = activeNodes.find(n => n.id === nodeId);
-    if (!node) return;
-
-    setSelectedNodeId(nodeId);
-    setSelectedEdgeId(null);
-    setSelectedEdgeData(null);
-    setSelectedNodeData({
-      id: node.id,
-      label: node.data?.label || node.id,
-      type: node.type,
-    });
-  };
-
-  const handleEdgeSelect = (edgeId: string) => {
-    const edge = activeEdges.find(e => e.id === edgeId);
-    if (!edge) return;
-
-    setSelectedEdgeId(edgeId);
-    setSelectedNodeId(null);
-    setSelectedNodeData(null);
-    setSelectedEdgeData(edge);
-  };
-
-  const createTopology = async (name: string) => {
-    try {
-      const newTopo = await topologyApi.create(name);
-      message.success(t('topologies.created', { name: newTopo.name }));
-      await refreshTopologies();
-      setActiveTopologyId(newTopo.id);
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('topologies.createFailed')), t));
-    }
-  };
-
-  const renameTopology = async (name: string) => {
-    if (!activeTopologyId) return;
-
-    try {
-      const updated = await topologyApi.rename(activeTopologyId, name);
-      message.success(t('topologies.renamed', { name: updated.name }));
-      await refreshTopologies();
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('topologies.renameFailed')), t));
-    }
-  };
-
-  const deleteTopology = () => {
-    if (!activeTopologyId) return;
-    if (activeTopologyId === 'topology-1') {
-      Modal.info({ title: t('topologies.protectedTitle'), content: t('topologies.protectedContent') });
-      return;
-    }
-    Modal.confirm({
-      title: t('topologies.deleteTitle'),
-      content: t('topologies.deleteContent'),
-      onOk: async () => {
-        try {
-          await topologyApi.delete(activeTopologyId);
-          message.success(t('topologies.deleted'));
-          const data = await refreshTopologies();
-          setActiveTopologyId(data[0]?.id ?? null);
-        } catch (err) {
-          console.error(err);
-          message.error(translateApiError(getApiErrorMessage(err, t('topologies.deleteFailed')), t));
-        }
-      },
-    });
-  };
-
-  const addNode = async (values: {
-    nodeId: string;
-    nodeType: TopologyNodeTypeValue;
-    nodeLabel: string;
-  }) => {
-    if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
-    const nodeId = values.nodeId.trim().toLowerCase().replace(/\s+/g, '-');
-
-    try {
-      await topologyApi.addNode(activeTopologyId, {
-        nodeId,
-        type: values.nodeType,
-        label: values.nodeLabel,
-      });
-      message.success(t('nodes.added'));
-      nodeForm.resetFields();
-      bumpTopology();
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('nodes.addFailed')), t));
-    }
-  };
-
-  const saveNodePositions = async (updates: { nodeId: string; position: { x: number; y: number } }[]) => {
-    if (!activeTopologyId || updates.length === 0) return;
-
-    try {
-      await Promise.all(
-        updates.map(({ nodeId, position }) =>
-          topologyApi.updateNodePosition(activeTopologyId, nodeId, position),
-        ),
-      );
-      message.success(t('nodes.positionSaved'));
-      bumpTopology();
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('nodes.positionSaveFailed')), t));
-      bumpTopology();
-    }
-  };
-
-  const updateNodeLabel = async (values: { label: string }) => {
-    if (!activeTopologyId || !selectedNodeData) return;
-
-    try {
-      const updatedNode = await topologyApi.updateNode(activeTopologyId, selectedNodeData.id, {
-        label: values.label,
-      });
-      message.success(t('nodes.updated'));
-      setSelectedNodeData({
-        id: updatedNode.id,
-        label: updatedNode.data?.label || updatedNode.id,
-        type: updatedNode.type,
-      });
-      bumpTopology();
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('nodes.updateFailed')), t));
-    }
-  };
-
-  const deleteNode = (nodeId: string) => {
-    if (!activeTopologyId) return;
-    Modal.confirm({
-      title: t('nodes.deleteTitle', { id: nodeId }),
-      content: t('nodes.deleteContent'),
-      onOk: async () => {
-        try {
-          await topologyApi.deleteNode(activeTopologyId, nodeId);
-          message.success(t('nodes.deleted'));
-          setSelectedNodeId(null);
-          setSelectedNodeData(null);
-          bumpTopology();
-        } catch (err) {
-          console.error(err);
-          message.error(translateApiError(getApiErrorMessage(err, t('nodes.deleteFailed')), t));
-        }
-      },
-    });
-  };
-
-  const validateEdgeForm = (source: string, target: string): string | null => {
-    const trimmedSource = source.trim();
-    const trimmedTarget = target.trim();
-
-    if (!trimmedSource || !trimmedTarget) {
-      return t('edges.sourceTargetRequired');
-    }
-    if (trimmedSource === trimmedTarget) {
-      return t('edges.sameNode');
-    }
-
-    const sourceNode = activeNodes.find(n => n.id === trimmedSource);
-    const targetNode = activeNodes.find(n => n.id === trimmedTarget);
-
-    if (!sourceNode || !targetNode) {
-      return t('edges.nodeMissing');
-    }
-
-    const topologyError = validateEdgeBetweenNodes(sourceNode, targetNode);
-    return topologyError ? translateApiError(topologyError, t) : null;
-  };
-
-  const validateGatewayField = (value: string | undefined): string | null => {
-    const trimmed = value?.trim() || '';
-    if (!trimmed) return null;
-    const error = getGatewayValidationError(trimmed);
-    return error ? translateApiError(error, t) : null;
-  };
-
-  const addEdge = async (values: { source: string; target: string; gateway?: string }) => {
-    if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
-
-    const validationError = validateEdgeForm(values.source, values.target);
-    if (validationError) {
-      message.error(validationError);
-      return;
-    }
-
-    const gatewayError = validateGatewayField(values.gateway);
-    if (gatewayError) {
-      message.error(gatewayError);
-      return;
-    }
-
-    const payload: { source: string; target: string; gateway?: string } = {
-      source: values.source.trim(),
-      target: values.target.trim(),
-    };
-    const gateway = values.gateway?.trim();
-    if (gateway) payload.gateway = gateway;
-
-    try {
-      await topologyApi.addEdge(activeTopologyId, payload);
-      message.success(t('edges.added'));
-      edgeForm.resetFields();
-      bumpTopology();
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('edges.addFailed')), t));
-    }
-  };
-
-  const updateEdgeGateway = async (values: { gateway?: string }) => {
-    if (!activeTopologyId || !selectedEdgeData) return;
-
-    const gatewayError = validateGatewayField(values.gateway);
-    if (gatewayError) {
-      message.error(gatewayError);
-      return;
-    }
-
-    try {
-      const updatedEdge = await topologyApi.updateEdge(activeTopologyId, selectedEdgeData.id, {
-        gateway: values.gateway?.trim() || '',
-      });
-      message.success(t('edges.updated'));
-      setSelectedEdgeData(updatedEdge);
-      bumpTopology();
-    } catch (err) {
-      console.error(err);
-      message.error(translateApiError(getApiErrorMessage(err, t('edges.updateFailed')), t));
-    }
-  };
-
-  const deleteEdge = (edgeId: string) => {
-    if (!activeTopologyId) return;
-    Modal.confirm({
-      title: t('edges.deleteTitle', { id: edgeId }),
-      onOk: async () => {
-        try {
-          await topologyApi.deleteEdge(activeTopologyId, edgeId);
-          message.success(t('edges.deleted'));
-          setSelectedEdgeId(null);
-          setSelectedEdgeData(null);
-          bumpTopology();
-        } catch (err) {
-          console.error(err);
-          message.error(translateApiError(getApiErrorMessage(err, t('edges.deleteFailed')), t));
-        }
-      },
-    });
-  };
-
   return (
     <Layout style={{ height: '100vh', background: '#0e1117' }}>
-      <Header style={{
-        background: 'rgba(20, 24, 33, 0.85)',
-        color: '#f3f4f6',
-        fontSize: 20,
-        fontWeight: '600',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-      }}>
-        <span>{t('app.title')}</span>
-        <Select
-          size="small"
-          value={locale}
-          onChange={setLocale}
-          style={{ width: 72, marginLeft: 'auto' }}
-          options={[
-            { value: 'id', label: t('locale.id') },
-            { value: 'en', label: t('locale.en') },
-          ]}
-        />
-      </Header>
+      <AppHeader />
       <Layout style={{ background: '#0e1117' }}>
-        <Sider
-          width={300}
-          theme="dark"
+        <TopologySidebar
+          topologies={topologies}
+          activeTopologyId={activeTopologyId}
+          nodes={activeNodes}
+          selectedNodeId={selection.selectedNodeId}
+          selectedNodeData={selection.selectedNodeData}
+          selectedEdgeId={selection.selectedEdgeId}
+          selectedEdgeData={selection.selectedEdgeData}
+          onSelectTopology={setActiveTopologyId}
+          onCreateTopology={mutations.createTopology}
+          onRenameTopology={mutations.renameTopology}
+          onDeleteTopology={mutations.deleteTopology}
+          onAddNode={mutations.addNode}
+          onAddEdge={mutations.addEdge}
+          validateEdgeForm={mutations.validateEdgeForm}
+          onUpdateNodeLabel={mutations.updateNodeLabel}
+          onDeleteNode={mutations.deleteNode}
+          onUpdateEdgeGateway={mutations.updateEdgeGateway}
+          onDeleteEdge={mutations.deleteEdge}
+        />
+        <Content
           style={{
-            background: 'rgba(20, 24, 33, 0.85)',
-            borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-            padding: 16,
-            overflow: 'auto',
-            backdropFilter: 'blur(8px)'
+            padding: 0,
+            background: '#0e1117',
+            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 0)',
+            backgroundSize: '24px 24px',
           }}
         >
-          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('topologies.title')}</Divider>
-          <Select
-            style={{ width: '100%' }}
-            placeholder={t('topologies.select')}
-            value={activeTopologyId || undefined}
-            onChange={id => setActiveTopologyId(id)}
-          >
-            {topologies.map(topology => (
-              <Select.Option key={topology.id} value={topology.id}>
-                {topology.name}
-              </Select.Option>
-            ))}
-          </Select>
-          <Space wrap style={{ marginTop: 8, width: '100%' }}>
-            <Button type="primary" onClick={() => {
-              Modal.confirm({
-                title: t('topologies.createTitle'),
-                content: (
-                  <Form form={topoForm} layout="vertical">
-                    <Form.Item name="name" label={t('topologies.name')} rules={[{ required: true }]}>
-                      <Input />
-                    </Form.Item>
-                  </Form>
-                ),
-                onOk: async () => {
-                  const values = await topoForm.validateFields();
-                  await createTopology(values.name);
-                  topoForm.resetFields();
-                },
-                okText: t('topologies.create'),
-                cancelText: t('topologies.cancel'),
-              });
-            }}>{t('topologies.new')}</Button>
-            <Button
-              disabled={!activeTopologyId}
-              onClick={() => {
-                const currentName = topologies.find(topology => topology.id === activeTopologyId)?.name || '';
-                topoForm.setFieldsValue({ name: currentName });
-                Modal.confirm({
-                  title: t('topologies.renameTitle'),
-                  content: (
-                    <Form form={topoForm} layout="vertical">
-                      <Form.Item name="name" label={t('topologies.name')} rules={[{ required: true }]}>
-                        <Input />
-                      </Form.Item>
-                    </Form>
-                  ),
-                  onOk: async () => {
-                    const values = await topoForm.validateFields();
-                    await renameTopology(values.name);
-                    topoForm.resetFields();
-                  },
-                  okText: t('topologies.save'),
-                  cancelText: t('topologies.cancel'),
-                });
-              }}
-            >
-              {t('topologies.rename')}
-            </Button>
-            <Button danger onClick={deleteTopology}>{t('topologies.delete')}</Button>
-          </Space>
-
-          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('nodes.addTitle')}</Divider>
-          <Form
-            form={nodeForm}
-            layout="vertical"
-            onFinish={addNode}
-            initialValues={{ nodeType: 'subnet' }}
-            style={{ marginBottom: 12 }}
-          >
-            <Form.Item name="nodeId" label={t('nodes.id')} rules={[{ required: true }]}>
-              <Input id="nodeId" />
-            </Form.Item>
-            <Form.Item name="nodeLabel" label={t('nodes.label')} rules={[{ required: true }]}>
-              <Input id="nodeLabel" />
-            </Form.Item>
-            <Form.Item name="nodeType" label={t('nodes.type')} rules={[{ required: true }]}>
-              <Select>
-                <Select.Option value="subnet">{t('nodes.type.subnet')}</Select.Option>
-                <Select.Option value="router">{t('nodes.type.router')}</Select.Option>
-                <Select.Option value="instance">{t('nodes.type.instance')}</Select.Option>
-              </Select>
-            </Form.Item>
-            <Button type="primary" htmlType="submit" block>{t('nodes.add')}</Button>
-          </Form>
-
-          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('edges.addTitle')}</Divider>
-          <Form form={edgeForm} layout="vertical" onFinish={addEdge} style={{ marginBottom: 12 }}>
-            <Form.Item name="source" label={t('edges.source')} rules={[{ required: true, message: t('edges.sourceRequired') }]}>
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder={activeNodes.length ? t('edges.selectSource') : t('edges.noNodes')}
-                disabled={activeNodes.length === 0}
-                options={sourceOptions}
-                onChange={() => edgeForm.setFieldValue('target', undefined)}
-              />
-            </Form.Item>
-            <Form.Item
-              name="target"
-              label={t('edges.target')}
-              dependencies={['source']}
-              rules={[
-                { required: true, message: t('edges.targetRequired') },
-                {
-                  validator: async (_, value) => {
-                    const source = edgeForm.getFieldValue('source');
-                    if (!source || !value) return;
-                    const error = validateEdgeForm(source, value);
-                    if (error) throw new Error(error);
-                  },
-                },
-              ]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder={
-                  !edgeSource
-                    ? t('edges.selectSourceFirst')
-                    : targetOptions.length
-                      ? t('edges.selectTarget')
-                      : t('edges.noValidTargets')
-                }
-                disabled={!edgeSource || targetOptions.length === 0}
-                options={targetOptions}
-              />
-            </Form.Item>
-            <Form.Item name="gateway" label={t('edges.gateway')}>
-              <Input placeholder={t('edges.gatewayPlaceholder')} />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" block disabled={activeNodes.length === 0}>
-              {t('edges.add')}
-            </Button>
-          </Form>
-
-          {selectedNodeId && selectedNodeData && (
-            <>
-              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('nodes.selectedTitle')}</Divider>
-              <Form form={nodeDetailForm} layout="vertical" onFinish={updateNodeLabel}>
-                <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
-                  <Descriptions.Item label="ID">{selectedNodeData.id}</Descriptions.Item>
-                  <Descriptions.Item label={t('nodes.type')}>{selectedNodeData.type}</Descriptions.Item>
-                </Descriptions>
-                <Form.Item name="label" label={t('nodes.label')} rules={[{ required: true, message: t('nodes.labelRequired') }]}>
-                  <Input />
-                </Form.Item>
-                <Space style={{ width: '100%' }}>
-                  <Button type="primary" htmlType="submit">{t('common.save')}</Button>
-                  <Button danger onClick={() => deleteNode(selectedNodeId)}>{t('common.delete')}</Button>
-                </Space>
-              </Form>
-            </>
-          )}
-          {selectedEdgeId && selectedEdgeData && (
-            <>
-              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('edges.selectedTitle')}</Divider>
-              <Form form={edgeDetailForm} layout="vertical" onFinish={updateEdgeGateway}>
-                <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
-                  <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
-                  <Descriptions.Item label={t('edges.source')}>{selectedEdgeData.source}</Descriptions.Item>
-                  <Descriptions.Item label={t('edges.target')}>{selectedEdgeData.target}</Descriptions.Item>
-                </Descriptions>
-                <Form.Item name="gateway" label={t('edges.gateway')}>
-                  <Input placeholder={t('edges.gatewayPlaceholder')} allowClear />
-                </Form.Item>
-                <Space style={{ width: '100%' }}>
-                  <Button type="primary" htmlType="submit">{t('common.save')}</Button>
-                  <Button danger onClick={() => deleteEdge(selectedEdgeId)}>{t('edges.delete')}</Button>
-                </Space>
-              </Form>
-            </>
-          )}
-        </Sider>
-        <Content style={{
-          padding: 0,
-          background: '#0e1117',
-          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 0)',
-          backgroundSize: '24px 24px'
-        }}>
           <Suspense
             fallback={
               <div style={graphFallbackStyle}>
@@ -629,14 +109,14 @@ const App: React.FC = () => {
               error={topologyError}
               hasTopology={!!activeTopologyId}
               onRetry={bumpTopology}
-              onNodeSelect={handleNodeSelect}
-              onEdgeSelect={handleEdgeSelect}
-              onNodePositionsChange={saveNodePositions}
+              onNodeSelect={selection.selectNode}
+              onEdgeSelect={selection.selectEdge}
+              onNodePositionsChange={mutations.saveNodePositions}
             />
           </Suspense>
         </Content>
       </Layout>
-      </Layout>
+    </Layout>
   );
 };
 
