@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { isTopology } from '../shared/types.ts';
 import { closeDatabase, resetDatabase, seedTopology } from './db.ts';
 
+// Unit/API tests default to open access; dedicated auth tests set NETALIGN_AUTH_MODE=on.
+process.env.NETALIGN_AUTH_MODE = process.env.NETALIGN_AUTH_MODE ?? 'off';
+
 const seedPath = resolve(import.meta.dir, 'data/topology-1.json');
 
 closeDatabase();

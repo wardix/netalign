@@ -53,8 +53,10 @@ function collabHeaders(extra?: HeadersInit): Headers {
   return headers;
 }
 
+const credentials: RequestCredentials = 'include';
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(buildUrl(path), { headers: collabHeaders() });
+  const res = await fetch(buildUrl(path), { headers: collabHeaders(), credentials });
   return handleResponse<T>(res);
 }
 
@@ -63,6 +65,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     method: 'POST',
     headers: collabHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials,
   });
   return handleResponse<T>(res);
 }
@@ -72,6 +75,7 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
     method: 'PUT',
     headers: collabHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials,
   });
   return handleResponse<T>(res);
 }
@@ -81,6 +85,7 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
     method: 'PATCH',
     headers: collabHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials,
   });
   return handleResponse<T>(res);
 }
@@ -89,6 +94,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'DELETE',
     headers: collabHeaders(),
+    credentials,
   });
   return handleResponse<T>(res);
 }

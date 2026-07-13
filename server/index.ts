@@ -28,7 +28,22 @@ import {
   type ApiErrorCode,
 } from '../shared/apiErrors.ts';
 import { COLLAB_CLIENT_HEADER } from '../shared/collabProtocol.ts';
+import { SESSION_COOKIE_NAME } from '../shared/authConfig.ts';
 import { openApiDocument } from '../shared/openapi.ts';
+import {
+  attachAuthContext,
+  currentUserId,
+  extractSessionToken,
+  requireAuth,
+} from './authMiddleware.ts';
+import {
+  createSession,
+  deleteSession,
+  getPasswordValidationError,
+  getUsernameValidationError,
+  registerUser,
+  verifyUserCredentials,
+} from './authStore.ts';
 import {
   collabWebsocket,
   isCollabWsPath,
@@ -46,6 +61,7 @@ import { isOpenApiUiEnabled, renderSwaggerUiHtml } from './openapiUi.ts';
 import { validateRouteId } from './paths.ts';
 import * as topologyStore from './topologyStore.ts';
 import type { Context } from 'hono';
+import { deleteCookie, setCookie } from 'hono/cookie';
 
 const app = new Hono();
 
@@ -63,10 +79,13 @@ app.use(
   cors({
     origin: origin => resolveCorsOrigin(origin) ?? undefined,
     allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Collab-Client-Id'],
+    credentials: true,
     maxAge: 86400,
   }),
 );
+
+app.use('*', attachAuthContext);
 
 app.use('*', async (c, next) => {
   const requestId = c.req.header('x-request-id') || createRequestId();
@@ -106,14 +125,18 @@ app.get('/api/ready', c => {
 
 function jsonError(
   c: Context,
-  status: 400 | 403 | 404 | 500 | 503,
+  status: 400 | 401 | 403 | 404 | 500 | 503,
   code: ApiErrorCode,
   message?: string,
 ) {
   return c.json(buildApiError(code, message), status);
 }
 
-function jsonErrorFromMessage(c: Context, status: 400 | 403 | 404 | 500, message: string) {
+function jsonErrorFromMessage(
+  c: Context,
+  status: 400 | 401 | 403 | 404 | 500,
+  message: string,
+) {
   const code = codeFromErrorMessage(message) ?? 'INTERNAL_ERROR';
   return jsonError(c, status, code, message);
 }
@@ -144,6 +167,105 @@ function originClientId(c: Context): string | undefined {
   return value || undefined;
 }
 
+/**
+ * When auth is on, ensure the caller owns the topology.
+ * Missing topology → 404; wrong owner → 403.
+ */
+function denyIfNotOwner(c: Context, topologyId: string): Response | null {
+  if (!c.get('authEnabled')) return null;
+  const user = c.get('user');
+  if (!user) return jsonError(c, 401, 'AUTH_REQUIRED');
+  if (!topologyStore.topologyExists(topologyId)) return topologyNotFound(c);
+  if (!topologyStore.userOwnsTopology(topologyId, user.id)) {
+    return jsonError(c, 403, 'AUTH_FORBIDDEN');
+  }
+  return null;
+}
+
+function setSessionCookie(c: Context, token: string, expiresAt: Date) {
+  const isProd = (Bun.env.NODE_ENV ?? process.env.NODE_ENV) === 'production';
+  setCookie(c, SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'Lax',
+    secure: isProd,
+    expires: expiresAt,
+  });
+}
+
+function clearSessionCookie(c: Context) {
+  deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
+}
+
+// --- Auth routes (public) -------------------------------------------------
+
+app.get('/api/auth/status', c =>
+  c.json({
+    enabled: c.get('authEnabled'),
+    authenticated: !!c.get('user'),
+    user: c.get('user') ? { id: c.get('user')!.id, username: c.get('user')!.username } : null,
+  }),
+);
+
+app.get('/api/auth/me', c => {
+  const user = c.get('user');
+  if (!user) {
+    if (c.get('authEnabled')) return jsonError(c, 401, 'AUTH_REQUIRED');
+    return c.json({ user: null, authEnabled: false });
+  }
+  return c.json({ user: { id: user.id, username: user.username }, authEnabled: c.get('authEnabled') });
+});
+
+app.post('/api/auth/register', async c => {
+  try {
+    const body = await c.req.json();
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+
+    const usernameError = getUsernameValidationError(username);
+    if (usernameError) return jsonError(c, 400, 'AUTH_USERNAME_INVALID', usernameError);
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) return jsonError(c, 400, 'AUTH_PASSWORD_INVALID', passwordError);
+
+    const user = await registerUser(username, password);
+    const session = createSession(user.id);
+    setSessionCookie(c, session.token, session.expiresAt);
+    return c.json({ user: { id: user.id, username: user.username } }, 201);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === 'AUTH_USERNAME_TAKEN') {
+      return jsonError(c, 400, 'AUTH_USERNAME_TAKEN');
+    }
+    logRouteError('Error registering user', error, c);
+    return jsonError(c, 500, 'AUTH_REGISTER_FAILED');
+  }
+});
+
+app.post('/api/auth/login', async c => {
+  try {
+    const body = await c.req.json();
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+
+    const user = await verifyUserCredentials(username, password);
+    if (!user) return jsonError(c, 401, 'AUTH_INVALID_CREDENTIALS');
+
+    const session = createSession(user.id);
+    setSessionCookie(c, session.token, session.expiresAt);
+    return c.json({ user: { id: user.id, username: user.username } });
+  } catch (error) {
+    logRouteError('Error logging in', error, c);
+    return jsonError(c, 500, 'AUTH_LOGIN_FAILED');
+  }
+});
+
+app.post('/api/auth/logout', c => {
+  const token = extractSessionToken(c);
+  if (token) deleteSession(token);
+  clearSessionCookie(c);
+  return c.json({ success: true });
+});
+
 // Machine-readable OpenAPI 3 document (always available).
 app.get('/api/openapi.json', c => c.json(openApiDocument));
 
@@ -155,10 +277,15 @@ app.get('/api/docs', c => {
   return c.html(renderSwaggerUiHtml('/api/openapi.json'));
 });
 
+// Topology routes require auth when NETALIGN_AUTH_MODE is on (or production default).
+app.use('/api/topologies/*', requireAuth);
+app.use('/api/topologies', requireAuth);
+
 // 1. Get all topologies
 app.get('/api/topologies', async (c) => {
   try {
-    return c.json(topologyStore.listTopologies());
+    const ownerFilter = c.get('authEnabled') ? currentUserId(c) : null;
+    return c.json(topologyStore.listTopologies(ownerFilter));
   } catch (error) {
     logRouteError('Error reading topologies', error, c);
     return jsonError(c, 500, 'TOPOLOGY_LIST_FAILED');
@@ -170,6 +297,9 @@ app.get('/api/topologies/:id', async (c) => {
   const id = c.req.param('id');
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
+
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
 
   try {
     const data = topologyStore.getTopology(idResult.topologyId);
@@ -187,9 +317,8 @@ app.patch('/api/topologies/:id', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
 
   try {
     const body = await c.req.json();
@@ -231,7 +360,8 @@ app.post('/api/topologies', async (c) => {
       edges: [],
     };
 
-    topologyStore.createTopology(newTopology);
+    const ownerId = currentUserId(c);
+    topologyStore.createTopology(newTopology, ownerId ?? undefined);
     return c.json(newTopology, 201);
   } catch (error) {
     logRouteError('Error creating topology', error, c);
@@ -261,7 +391,8 @@ app.post('/api/topologies/import', async (c) => {
       }
     }
 
-    topologyStore.createTopology(topology);
+    const ownerId = currentUserId(c);
+    topologyStore.createTopology(topology, ownerId ?? undefined);
     publishTopologyEvent(
       topology.id,
       { kind: 'topology.replaced', topologyId: topology.id, topology },
@@ -295,9 +426,8 @@ app.post('/api/topologies/:id/delete', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
 
   const protectedResponse = refuseProtectedTopologyDelete(c, idResult.topologyId);
   if (protectedResponse) return protectedResponse;
@@ -326,9 +456,8 @@ app.delete('/api/topologies/:id', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
 
   const protectedResponse = refuseProtectedTopologyDelete(c, idResult.topologyId);
   if (protectedResponse) return protectedResponse;
@@ -353,9 +482,8 @@ app.post('/api/topologies/:id/nodes', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
 
   try {
     const body = (await c.req.json()) as CreateNodeBody;
@@ -397,9 +525,9 @@ app.put('/api/topologies/:id/nodes/positions', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
+
 
   try {
     const body = (await c.req.json()) as BatchNodePositionsBody;
@@ -454,9 +582,9 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
+
 
   try {
     const body = (await c.req.json()) as UpdateNodeBody;
@@ -513,9 +641,9 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
+
 
   try {
     const deleted = topologyStore.deleteNode(idResult.topologyId, nodeId);
@@ -541,9 +669,9 @@ app.post('/api/topologies/:id/edges', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
+
 
   try {
     const body = (await c.req.json()) as CreateEdgeBody;
@@ -613,9 +741,9 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
+
 
   try {
     const body = (await c.req.json()) as UpdateEdgeBody;
@@ -659,9 +787,9 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   const idResult = topologyIdOrResponse(c, id);
   if ('response' in idResult) return idResult.response;
 
-  if (!topologyStore.topologyExists(idResult.topologyId)) {
-    return topologyNotFound(c);
-  }
+  const denied = denyIfNotOwner(c, idResult.topologyId);
+  if (denied) return denied;
+
 
   try {
     const deleted = topologyStore.deleteEdge(idResult.topologyId, edgeId);

@@ -1,3 +1,4 @@
+import { LEGACY_OWNER_ID } from '../shared/authConfig.ts';
 import type { NodePosition } from '../shared/nodePosition.ts';
 import type {
   Topology,
@@ -46,8 +47,17 @@ function rowToEdge(row: EdgeRow): TopologyEdge {
   return edge;
 }
 
-export function listTopologies(): TopologySummary[] {
+/**
+ * List topologies. When `ownerId` is set, only that owner's rows are returned.
+ * When omitted, list all (auth disabled / admin-style internal use).
+ */
+export function listTopologies(ownerId?: string | null): TopologySummary[] {
   const db = getDatabase();
+  if (ownerId) {
+    return db
+      .query('SELECT id, name FROM topologies WHERE owner_id = ? ORDER BY id')
+      .all(ownerId) as TopologySummary[];
+  }
   return db
     .query('SELECT id, name FROM topologies ORDER BY id')
     .all() as TopologySummary[];
@@ -59,6 +69,21 @@ export function topologyExists(id: string): boolean {
     | { found: number }
     | null;
   return row != null;
+}
+
+export function getTopologyOwnerId(id: string): string | null {
+  const db = getDatabase();
+  const row = db
+    .query('SELECT owner_id FROM topologies WHERE id = ?')
+    .get(id) as { owner_id: string | null } | null;
+  return row?.owner_id ?? null;
+}
+
+/** True if topology exists and is owned by userId (or auth scoping is not applied). */
+export function userOwnsTopology(id: string, userId: string | null | undefined): boolean {
+  if (!userId) return false;
+  const owner = getTopologyOwnerId(id);
+  return owner === userId;
 }
 
 export function getTopology(id: string): Topology | null {
@@ -87,10 +112,10 @@ export function getTopology(id: string): Topology | null {
   };
 }
 
-export function createTopology(topology: Topology): void {
+export function createTopology(topology: Topology, ownerId: string = LEGACY_OWNER_ID): void {
   const db = getDatabase();
   db.transaction(() => {
-    insertTopologyRecord(db, topology);
+    insertTopologyRecord(db, topology, ownerId);
   })();
 }
 
@@ -304,8 +329,16 @@ export function deleteEdge(topologyId: string, edgeId: string): boolean {
   })();
 }
 
-function insertTopologyRecord(db: ReturnType<typeof getDatabase>, topology: Topology): void {
-  db.run('INSERT INTO topologies (id, name) VALUES (?, ?)', [topology.id, topology.name]);
+function insertTopologyRecord(
+  db: ReturnType<typeof getDatabase>,
+  topology: Topology,
+  ownerId: string = LEGACY_OWNER_ID,
+): void {
+  db.run('INSERT INTO topologies (id, name, owner_id) VALUES (?, ?, ?)', [
+    topology.id,
+    topology.name,
+    ownerId,
+  ]);
 
   const insertNode = db.prepare(`
     INSERT INTO nodes (topology_id, id, type, label, position_x, position_y)
