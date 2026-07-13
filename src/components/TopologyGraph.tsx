@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Button, Empty, Spin } from 'antd';
 import CytoscapeComponent from 'react-cytoscapejs';
+import { useI18n } from '../i18n/I18nProvider.tsx';
 import { buildEdgeId } from '../../shared/edgeIds.ts';
 import type { TopologyNode } from '../../shared/topologyNodes.ts';
 
@@ -327,6 +328,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onNodeSelect,
   onEdgeSelect,
 }) => {
+  const { t } = useI18n();
   const [elements, setElements] = useState<any[]>([]);
   const [styles, setStyles] = useState<any[]>([]);
   const cyRef = useRef<any>(null);
@@ -381,12 +383,12 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
         <Alert
           type="error"
           showIcon
-          message="Failed to load topology"
+          message={t('canvas.loadFailed')}
           description={error}
           action={
             onRetry ? (
               <Button size="small" onClick={onRetry}>
-                Retry
+                {t('common.retry')}
               </Button>
             ) : undefined
           }
@@ -399,7 +401,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   if (loading) {
     return (
       <div style={canvasOverlayStyle}>
-        <Spin size="large" tip="Loading topology..." />
+        <Spin size="large" tip={t('canvas.loading')} />
       </div>
     );
   }
@@ -407,7 +409,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   if (!hasTopology) {
     return (
       <div style={canvasOverlayStyle}>
-        <Empty description="Select a topology from the sidebar" />
+        <Empty description={t('canvas.selectTopology')} />
       </div>
     );
   }
@@ -415,7 +417,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   if (nodes.length === 0) {
     return (
       <div style={canvasOverlayStyle}>
-        <Empty description="No nodes in this topology" />
+        <Empty description={t('canvas.noNodes')} />
       </div>
     );
   }
@@ -462,7 +464,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
               justifyContent: 'center',
               boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
             }}
-            title="Zoom In"
+            title={t('canvas.zoomIn')}
           >
             +
           </button>
@@ -482,7 +484,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
               justifyContent: 'center',
               boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
             }}
-            title="Zoom Out"
+            title={t('canvas.zoomOut')}
           >
             -
           </button>
@@ -502,9 +504,9 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
               justifyContent: 'center',
               boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
             }}
-            title="Fit to Center"
+            title={t('canvas.fit')}
           >
-            Fit
+            {t('canvas.fit')}
           </button>
         </div>
       </div>

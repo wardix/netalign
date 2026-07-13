@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions } from 'antd';
 import TopologyGraph from './components/TopologyGraph';
+import { useI18n } from './i18n/I18nProvider.tsx';
+import { translateApiError } from './i18n/translations.ts';
 import { API_BASE } from './api';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import {
@@ -25,6 +27,7 @@ interface TopologyEdge {
 }
 
 const App: React.FC = () => {
+  const { t, locale, setLocale } = useI18n();
   const [topologies, setTopologies] = useState<TopologyInfo[]>([]);
   const [activeTopologyId, setActiveTopologyId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -56,7 +59,7 @@ const App: React.FC = () => {
       })
       .catch(err => {
         console.error(err);
-        message.error('Failed to load topologies');
+        message.error(t('topologies.loadFailed'));
       });
   };
 
@@ -101,7 +104,7 @@ const App: React.FC = () => {
         console.error('Failed to load topology detail', err);
         setActiveNodes([]);
         setActiveEdges([]);
-        setTopologyError('Failed to load topology. The server may be unavailable.');
+        setTopologyError(t('canvas.loadFailedDetail'));
       })
       .finally(() => {
         if (!cancelled) setTopologyLoading(false);
@@ -110,7 +113,7 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeTopologyId, refreshKey]);
+  }, [activeTopologyId, refreshKey, t]);
 
   useEffect(() => {
     edgeForm.resetFields();
@@ -206,12 +209,12 @@ const App: React.FC = () => {
         return res.json();
       })
       .then(newTopo => {
-        message.success(`Topology "${newTopo.name}" created`);
+        message.success(t('topologies.created', { name: newTopo.name }));
         loadTopologies(newTopo.id);
       })
       .catch(err => {
         console.error(err);
-        message.error('Failed to create topology');
+        message.error(t('topologies.createFailed'));
       });
   };
 
@@ -224,28 +227,28 @@ const App: React.FC = () => {
       body: JSON.stringify({ name }),
     })
       .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Rename failed'); });
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('topologies.renameFailed')); });
         return res.json();
       })
       .then(updated => {
-        message.success(`Topology renamed to "${updated.name}"`);
+        message.success(t('topologies.renamed', { name: updated.name }));
         loadTopologies(activeTopologyId);
       })
       .catch(err => {
         console.error(err);
-        message.error(err.message || 'Failed to rename topology');
+        message.error(translateApiError(err.message || t('topologies.renameFailed'), t));
       });
   };
 
   const deleteTopology = () => {
     if (!activeTopologyId) return;
     if (activeTopologyId === 'topology-1') {
-      Modal.info({ title: 'Protected', content: 'Default topology cannot be deleted.' });
+      Modal.info({ title: t('topologies.protectedTitle'), content: t('topologies.protectedContent') });
       return;
     }
     Modal.confirm({
-      title: 'Delete topology?',
-      content: 'This action cannot be undone.',
+      title: t('topologies.deleteTitle'),
+      content: t('topologies.deleteContent'),
       onOk: () => {
         fetch(`${API_BASE}/api/topologies/${activeTopologyId}`, { method: 'DELETE' })
           .then(res => {
@@ -253,12 +256,12 @@ const App: React.FC = () => {
             return res.json();
           })
           .then(() => {
-            message.success('Topology deleted');
+            message.success(t('topologies.deleted'));
             loadTopologies();
           })
           .catch(err => {
             console.error(err);
-            message.error('Failed to delete topology');
+            message.error(t('topologies.deleteFailed'));
           });
       },
     });
@@ -266,7 +269,7 @@ const App: React.FC = () => {
 
   // --- Node actions ---
   const addNode = (values: any) => {
-    if (!activeTopologyId) return message.warning('Select a topology first');
+    if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
     const nodeId = values.nodeId.trim().toLowerCase().replace(/\s+/g, '-');
     const payload = { nodeId, type: values.nodeType, label: values.nodeLabel };
     fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes`, {
@@ -275,17 +278,17 @@ const App: React.FC = () => {
       body: JSON.stringify(payload),
     })
       .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Add node failed'); });
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('nodes.addFailed')); });
         return res.json();
       })
       .then(() => {
-        message.success('Node added');
+        message.success(t('nodes.added'));
         nodeForm.resetFields();
         setRefreshKey(k => k + 1);
       })
       .catch(err => {
         console.error(err);
-        message.error(err.message || 'Failed to add node');
+        message.error(translateApiError(err.message || t('nodes.addFailed'), t));
       });
   };
 
@@ -298,11 +301,11 @@ const App: React.FC = () => {
       body: JSON.stringify({ label: values.label }),
     })
       .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Update node failed'); });
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('nodes.updateFailed')); });
         return res.json();
       })
       .then(updatedNode => {
-        message.success('Node label updated');
+        message.success(t('nodes.updated'));
         setSelectedNodeData({
           id: updatedNode.id,
           label: updatedNode.data?.label || updatedNode.id,
@@ -312,15 +315,15 @@ const App: React.FC = () => {
       })
       .catch(err => {
         console.error(err);
-        message.error(err.message || 'Failed to update node');
+        message.error(translateApiError(err.message || t('nodes.updateFailed'), t));
       });
   };
 
   const deleteNode = (nodeId: string) => {
     if (!activeTopologyId) return;
     Modal.confirm({
-      title: `Delete node "${nodeId}"?`,
-      content: 'All connected edges will be removed.',
+      title: t('nodes.deleteTitle', { id: nodeId }),
+      content: t('nodes.deleteContent'),
       onOk: () => {
         fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${nodeId}`, { method: 'DELETE' })
           .then(res => {
@@ -328,14 +331,14 @@ const App: React.FC = () => {
             return res.json();
           })
           .then(() => {
-            message.success('Node deleted');
+            message.success(t('nodes.deleted'));
             setSelectedNodeId(null);
             setSelectedNodeData(null);
             setRefreshKey(k => k + 1);
           })
           .catch(err => {
             console.error(err);
-            message.error('Failed to delete node');
+            message.error(t('nodes.deleteFailed'));
           });
       },
     });
@@ -346,25 +349,26 @@ const App: React.FC = () => {
     const trimmedTarget = target.trim();
 
     if (!trimmedSource || !trimmedTarget) {
-      return 'Source and target are required';
+      return t('edges.sourceTargetRequired');
     }
     if (trimmedSource === trimmedTarget) {
-      return 'Source and target must be different nodes';
+      return t('edges.sameNode');
     }
 
     const sourceNode = activeNodes.find(n => n.id === trimmedSource);
     const targetNode = activeNodes.find(n => n.id === trimmedTarget);
 
     if (!sourceNode || !targetNode) {
-      return 'Source or target node does not exist in the active topology';
+      return t('edges.nodeMissing');
     }
 
-    return validateEdgeBetweenNodes(sourceNode, targetNode);
+    const topologyError = validateEdgeBetweenNodes(sourceNode, targetNode);
+    return topologyError ? translateApiError(topologyError, t) : null;
   };
 
   // --- Edge actions ---
   const addEdge = (values: { source: string; target: string }) => {
-    if (!activeTopologyId) return message.warning('Select a topology first');
+    if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
 
     const validationError = validateEdgeForm(values.source, values.target);
     if (validationError) {
@@ -382,24 +386,24 @@ const App: React.FC = () => {
       body: JSON.stringify(payload),
     })
       .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Add edge failed'); });
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('edges.addFailed')); });
         return res.json();
       })
       .then(() => {
-        message.success('Edge added');
+        message.success(t('edges.added'));
         edgeForm.resetFields();
         setRefreshKey(k => k + 1);
       })
       .catch(err => {
         console.error(err);
-        message.error(err.message || 'Failed to add edge');
+        message.error(translateApiError(err.message || t('edges.addFailed'), t));
       });
   };
 
   const deleteEdge = (edgeId: string) => {
     if (!activeTopologyId) return;
     Modal.confirm({
-      title: `Delete edge "${edgeId}"?`,
+      title: t('edges.deleteTitle', { id: edgeId }),
       onOk: () => {
         fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${edgeId}`, { method: 'DELETE' })
           .then(res => {
@@ -407,14 +411,14 @@ const App: React.FC = () => {
             return res.json();
           })
           .then(() => {
-            message.success('Edge deleted');
+            message.success(t('edges.deleted'));
             setSelectedEdgeId(null);
             setSelectedEdgeData(null);
             setRefreshKey(k => k + 1);
           })
           .catch(err => {
             console.error(err);
-            message.error('Failed to delete edge');
+            message.error(t('edges.deleteFailed'));
           });
       },
     });
@@ -430,9 +434,20 @@ const App: React.FC = () => {
         borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
-        alignItems: 'center'
+        alignItems: 'center',
+        gap: 16,
       }}>
-        NetAlign
+        <span>{t('app.title')}</span>
+        <Select
+          size="small"
+          value={locale}
+          onChange={setLocale}
+          style={{ width: 72, marginLeft: 'auto' }}
+          options={[
+            { value: 'id', label: t('locale.id') },
+            { value: 'en', label: t('locale.en') },
+          ]}
+        />
       </Header>
       <Layout style={{ background: '#0e1117' }}>
         <Sider
@@ -446,10 +461,10 @@ const App: React.FC = () => {
             backdropFilter: 'blur(8px)'
           }}
         >
-          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Topologies</Divider>
+          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('topologies.title')}</Divider>
           <Select
             style={{ width: '100%' }}
-            placeholder="Select topology"
+            placeholder={t('topologies.select')}
             value={activeTopologyId || undefined}
             onChange={id => setActiveTopologyId(id)}
           >
@@ -462,10 +477,10 @@ const App: React.FC = () => {
           <Space wrap style={{ marginTop: 8, width: '100%' }}>
             <Button type="primary" onClick={() => {
               Modal.confirm({
-                title: 'Create Topology',
+                title: t('topologies.createTitle'),
                 content: (
                   <Form form={topoForm} layout="vertical">
-                    <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+                    <Form.Item name="name" label={t('topologies.name')} rules={[{ required: true }]}>
                       <Input />
                     </Form.Item>
                   </Form>
@@ -475,20 +490,20 @@ const App: React.FC = () => {
                   createTopology(values.name);
                   topoForm.resetFields();
                 },
-                okText: 'Create',
-                cancelText: 'Cancel',
+                okText: t('topologies.create'),
+                cancelText: t('topologies.cancel'),
               });
-            }}>New</Button>
+            }}>{t('topologies.new')}</Button>
             <Button
               disabled={!activeTopologyId}
               onClick={() => {
                 const currentName = topologies.find(t => t.id === activeTopologyId)?.name || '';
                 topoForm.setFieldsValue({ name: currentName });
                 Modal.confirm({
-                  title: 'Rename Topology',
+                  title: t('topologies.renameTitle'),
                   content: (
                     <Form form={topoForm} layout="vertical">
-                      <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+                      <Form.Item name="name" label={t('topologies.name')} rules={[{ required: true }]}>
                         <Input />
                       </Form.Item>
                     </Form>
@@ -498,17 +513,17 @@ const App: React.FC = () => {
                     renameTopology(values.name);
                     topoForm.resetFields();
                   },
-                  okText: 'Save',
-                  cancelText: 'Cancel',
+                  okText: t('topologies.save'),
+                  cancelText: t('topologies.cancel'),
                 });
               }}
             >
-              Rename
+              {t('topologies.rename')}
             </Button>
-            <Button danger onClick={deleteTopology}>Delete</Button>
+            <Button danger onClick={deleteTopology}>{t('topologies.delete')}</Button>
           </Space>
 
-          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Node</Divider>
+          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('nodes.addTitle')}</Divider>
           <Form
             form={nodeForm}
             layout="vertical"
@@ -516,29 +531,29 @@ const App: React.FC = () => {
             initialValues={{ nodeType: 'subnet' }}
             style={{ marginBottom: 12 }}
           >
-            <Form.Item name="nodeId" label="Node ID" rules={[{ required: true }]}>
+            <Form.Item name="nodeId" label={t('nodes.id')} rules={[{ required: true }]}>
               <Input id="nodeId" />
             </Form.Item>
-            <Form.Item name="nodeLabel" label="Label" rules={[{ required: true }]}>
+            <Form.Item name="nodeLabel" label={t('nodes.label')} rules={[{ required: true }]}>
               <Input id="nodeLabel" />
             </Form.Item>
-            <Form.Item name="nodeType" label="Type" rules={[{ required: true }]}>
+            <Form.Item name="nodeType" label={t('nodes.type')} rules={[{ required: true }]}>
               <Select>
-                <Select.Option value="subnet">Subnet</Select.Option>
-                <Select.Option value="router">Router</Select.Option>
-                <Select.Option value="instance">Instance</Select.Option>
+                <Select.Option value="subnet">{t('nodes.type.subnet')}</Select.Option>
+                <Select.Option value="router">{t('nodes.type.router')}</Select.Option>
+                <Select.Option value="instance">{t('nodes.type.instance')}</Select.Option>
               </Select>
             </Form.Item>
-            <Button type="primary" htmlType="submit" block>Add Node</Button>
+            <Button type="primary" htmlType="submit" block>{t('nodes.add')}</Button>
           </Form>
 
-          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Edge</Divider>
+          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('edges.addTitle')}</Divider>
           <Form form={edgeForm} layout="vertical" onFinish={addEdge} style={{ marginBottom: 12 }}>
-            <Form.Item name="source" label="Source" rules={[{ required: true, message: 'Select a source node' }]}>
+            <Form.Item name="source" label={t('edges.source')} rules={[{ required: true, message: t('edges.sourceRequired') }]}>
               <Select
                 showSearch
                 optionFilterProp="label"
-                placeholder={activeNodes.length ? 'Select source node' : 'No nodes in topology'}
+                placeholder={activeNodes.length ? t('edges.selectSource') : t('edges.noNodes')}
                 disabled={activeNodes.length === 0}
                 options={sourceOptions}
                 onChange={() => edgeForm.setFieldValue('target', undefined)}
@@ -546,10 +561,10 @@ const App: React.FC = () => {
             </Form.Item>
             <Form.Item
               name="target"
-              label="Target"
+              label={t('edges.target')}
               dependencies={['source']}
               rules={[
-                { required: true, message: 'Select a target node' },
+                { required: true, message: t('edges.targetRequired') },
                 {
                   validator: async (_, value) => {
                     const source = edgeForm.getFieldValue('source');
@@ -565,47 +580,47 @@ const App: React.FC = () => {
                 optionFilterProp="label"
                 placeholder={
                   !edgeSource
-                    ? 'Select source first'
+                    ? t('edges.selectSourceFirst')
                     : targetOptions.length
-                      ? 'Select target node'
-                      : 'No valid targets for this source'
+                      ? t('edges.selectTarget')
+                      : t('edges.noValidTargets')
                 }
                 disabled={!edgeSource || targetOptions.length === 0}
                 options={targetOptions}
               />
             </Form.Item>
             <Button type="primary" htmlType="submit" block disabled={activeNodes.length === 0}>
-              Add Edge
+              {t('edges.add')}
             </Button>
           </Form>
 
           {selectedNodeId && selectedNodeData && (
             <>
-              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Node</Divider>
+              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('nodes.selectedTitle')}</Divider>
               <Form form={nodeDetailForm} layout="vertical" onFinish={updateNodeLabel}>
                 <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
                   <Descriptions.Item label="ID">{selectedNodeData.id}</Descriptions.Item>
-                  <Descriptions.Item label="Type">{selectedNodeData.type}</Descriptions.Item>
+                  <Descriptions.Item label={t('nodes.type')}>{selectedNodeData.type}</Descriptions.Item>
                 </Descriptions>
-                <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label is required' }]}>
+                <Form.Item name="label" label={t('nodes.label')} rules={[{ required: true, message: t('nodes.labelRequired') }]}>
                   <Input />
                 </Form.Item>
                 <Space style={{ width: '100%' }}>
-                  <Button type="primary" htmlType="submit">Save</Button>
-                  <Button danger onClick={() => deleteNode(selectedNodeId)}>Delete</Button>
+                  <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+                  <Button danger onClick={() => deleteNode(selectedNodeId)}>{t('common.delete')}</Button>
                 </Space>
               </Form>
             </>
           )}
           {selectedEdgeId && selectedEdgeData && (
             <>
-              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Edge</Divider>
+              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('edges.selectedTitle')}</Divider>
               <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
                 <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
-                <Descriptions.Item label="Source">{selectedEdgeData.source}</Descriptions.Item>
-                <Descriptions.Item label="Target">{selectedEdgeData.target}</Descriptions.Item>
+                <Descriptions.Item label={t('edges.source')}>{selectedEdgeData.source}</Descriptions.Item>
+                <Descriptions.Item label={t('edges.target')}>{selectedEdgeData.target}</Descriptions.Item>
               </Descriptions>
-              <Button danger block onClick={() => deleteEdge(selectedEdgeId)}>Delete Edge</Button>
+              <Button danger block onClick={() => deleteEdge(selectedEdgeId)}>{t('edges.delete')}</Button>
             </>
           )}
         </Sider>
