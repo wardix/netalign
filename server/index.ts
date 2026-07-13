@@ -23,6 +23,12 @@ import {
   PROTECTED_TOPOLOGY_DELETE_ERROR,
 } from '../shared/protectedTopologies.ts';
 import { createCorsOriginResolver } from './corsConfig.ts';
+import { getLiveness, getReadiness } from './health.ts';
+import {
+  createRequestId,
+  isRequestLoggingEnabled,
+  logger,
+} from './logger.ts';
 import { validateRouteId } from './paths.ts';
 import * as topologyStore from './topologyStore.ts';
 import type { Context } from 'hono';
@@ -47,6 +53,42 @@ app.use(
     maxAge: 86400,
   }),
 );
+
+app.use('*', async (c, next) => {
+  const requestId = c.req.header('x-request-id') || createRequestId();
+  c.header('x-request-id', requestId);
+  const started = performance.now();
+  await next();
+  if (isRequestLoggingEnabled()) {
+    const path = new URL(c.req.url).pathname;
+    // Skip noisy probes unless debug-level access logging is desired.
+    if (path === '/api/health' || path === '/api/ready') return;
+    logger.info('http_request', {
+      requestId,
+      method: c.req.method,
+      path,
+      status: c.res.status,
+      durationMs: Math.round(performance.now() - started),
+    });
+  }
+});
+
+function logRouteError(message: string, error: unknown, c?: Context) {
+  logger.error(message, {
+    err: error,
+    requestId: c?.res.headers.get('x-request-id') ?? undefined,
+    path: c ? new URL(c.req.url).pathname : undefined,
+  });
+}
+
+// Liveness: process is up (for load balancers / k8s livenessProbe).
+app.get('/api/health', c => c.json(getLiveness()));
+
+// Readiness: SQLite accepts queries (for k8s readinessProbe).
+app.get('/api/ready', c => {
+  const body = getReadiness();
+  return c.json(body, body.status === 'ready' ? 200 : 503);
+});
 
 function invalidIdResponse(c: Context, id: string) {
   const validation = validateRouteId(id);
@@ -73,7 +115,7 @@ app.get('/api/topologies', async (c) => {
   try {
     return c.json(topologyStore.listTopologies());
   } catch (error) {
-    console.error('Error reading topologies:', error);
+    logRouteError('Error reading topologies', error, c);
     return c.json({ error: 'Failed to read topologies' }, 500);
   }
 });
@@ -89,7 +131,7 @@ app.get('/api/topologies/:id', async (c) => {
     if (!data) return topologyNotFound(c);
     return c.json(data);
   } catch (error) {
-    console.error('Error fetching topology:', error);
+    logRouteError('Error fetching topology', error, c);
     return c.json({ error: 'Failed to read topology file' }, 500);
   }
 });
@@ -116,7 +158,7 @@ app.patch('/api/topologies/:id', async (c) => {
     if (!updated) return topologyNotFound(c);
     return c.json(updated satisfies TopologySummary);
   } catch (error) {
-    console.error('Error updating topology:', error);
+    logRouteError('Error updating topology', error, c);
     return c.json({ error: 'Failed to update topology' }, 500);
   }
 });
@@ -142,7 +184,7 @@ app.post('/api/topologies', async (c) => {
     topologyStore.createTopology(newTopology);
     return c.json(newTopology, 201);
   } catch (error) {
-    console.error('Error creating topology:', error);
+    logRouteError('Error creating topology', error, c);
     return c.json({ error: 'Failed to create topology' }, 500);
   }
 });
@@ -172,7 +214,7 @@ app.post('/api/topologies/import', async (c) => {
     topologyStore.createTopology(topology);
     return c.json(topology, 201);
   } catch (error) {
-    console.error('Error importing topology:', error);
+    logRouteError('Error importing topology', error, c);
     return c.json({ error: 'Failed to import topology' }, 500);
   }
 });
@@ -201,7 +243,7 @@ app.post('/api/topologies/:id/delete', async (c) => {
     topologyStore.deleteTopology(idResult.topologyId);
     return c.json({ success: true, message: `Deleted topology ${id}` });
   } catch (error) {
-    console.error('Error deleting topology:', error);
+    logRouteError('Error deleting topology', error, c);
     return c.json({ error: 'Failed to delete topology file' }, 500);
   }
 });
@@ -222,7 +264,7 @@ app.delete('/api/topologies/:id', async (c) => {
     topologyStore.deleteTopology(idResult.topologyId);
     return c.json({ success: true, message: `Deleted topology ${id}` });
   } catch (error) {
-    console.error('Error deleting topology:', error);
+    logRouteError('Error deleting topology', error, c);
     return c.json({ error: 'Failed to delete topology file' }, 500);
   }
 });
@@ -261,7 +303,7 @@ app.post('/api/topologies/:id/nodes', async (c) => {
     topologyStore.addNode(idResult.topologyId, newNode);
     return c.json(newNode, 201);
   } catch (error) {
-    console.error('Error adding node:', error);
+    logRouteError('Error adding node', error, c);
     return c.json({ error: 'Failed to add node' }, 500);
   }
 });
@@ -305,7 +347,7 @@ app.put('/api/topologies/:id/nodes/positions', async (c) => {
     }
     return c.json({ nodes: result.nodes });
   } catch (error) {
-    console.error('Error batch-updating node positions:', error);
+    logRouteError('Error batch-updating node positions', error, c);
     return c.json({ error: 'Failed to update node positions' }, 500);
   }
 });
@@ -359,7 +401,7 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
     if (!node) return c.json({ error: 'Node not found' }, 404);
     return c.json(node);
   } catch (error) {
-    console.error('Error updating node:', error);
+    logRouteError('Error updating node', error, c);
     return c.json({ error: 'Failed to update node' }, 500);
   }
 });
@@ -386,7 +428,7 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
 
     return c.json({ success: true, message: `Node ${nodeId} deleted with connections` });
   } catch (error) {
-    console.error('Error deleting node:', error);
+    logRouteError('Error deleting node', error, c);
     return c.json({ error: 'Failed to delete node' }, 500);
   }
 });
@@ -449,7 +491,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
     topologyStore.addEdge(idResult.topologyId, newEdge);
     return c.json(newEdge, 201);
   } catch (error) {
-    console.error('Error adding edge:', error);
+    logRouteError('Error adding edge', error, c);
     return c.json({ error: 'Failed to add edge' }, 500);
   }
 });
@@ -490,7 +532,7 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
 
     return c.json(edge);
   } catch (error) {
-    console.error('Error updating edge:', error);
+    logRouteError('Error updating edge', error, c);
     return c.json({ error: 'Failed to update edge' }, 500);
   }
 });
@@ -517,13 +559,13 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
 
     return c.json({ success: true, message: `Edge ${edgeId} deleted` });
   } catch (error) {
-    console.error('Error deleting edge:', error);
+    logRouteError('Error deleting edge', error, c);
     return c.json({ error: 'Failed to delete edge' }, 500);
   }
 });
 
 const port = parseInt(Bun.env.PORT || process.env.PORT || '5000', 10);
-console.log(`Hono backend is running on http://localhost:${port}`);
+logger.info('server_listen', { port, url: `http://localhost:${port}` });
 
 export default {
   port,
