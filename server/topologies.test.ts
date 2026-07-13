@@ -11,6 +11,61 @@ afterAll(async () => {
   }
 });
 
+describe('topology import API', () => {
+  test('imports a valid topology document as a new topology', async () => {
+    const source = await server.fetch(new Request('http://localhost/api/topologies/topology-1'));
+    const document = await source.json();
+
+    const response = await server.fetch(
+      new Request('http://localhost/api/topologies/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Imported From Seed',
+          nodes: document.nodes,
+          edges: document.edges,
+        }),
+      }),
+    );
+    expect(response.status).toBe(201);
+
+    const imported = await response.json();
+    createdTopologyIds.push(imported.id);
+    expect(imported.id).not.toBe('topology-1');
+    expect(imported.name).toBe('Imported From Seed');
+    expect(imported.nodes.length).toBe(document.nodes.length);
+    expect(imported.edges.length).toBe(document.edges.length);
+
+    const read = await server.fetch(
+      new Request(`http://localhost/api/topologies/${imported.id}`),
+    );
+    expect(read.status).toBe(200);
+    const body = await read.json();
+    expect(body.nodes.length).toBe(document.nodes.length);
+  });
+
+  test('rejects invalid import documents', async () => {
+    const response = await server.fetch(
+      new Request('http://localhost/api/topologies/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Bad Import',
+          nodes: [
+            { id: 'r1', type: 'router' },
+            { id: 'r2', type: 'router' },
+          ],
+          edges: [{ id: 'e1', source: 'r1', target: 'r2' }],
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(typeof body.error).toBe('string');
+    expect(body.error.length).toBeGreaterThan(0);
+  });
+});
+
 describe('topology CRUD API', () => {
   test('lists topologies', async () => {
     const response = await server.fetch(new Request('http://localhost/api/topologies'));

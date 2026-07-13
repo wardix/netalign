@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button, Divider, Form, Input, Modal, Select, Space } from 'antd';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { TopologySummary } from '../../shared/types.ts';
@@ -10,6 +10,8 @@ interface TopologyManagerProps {
   onCreateTopology: (name: string) => Promise<boolean>;
   onRenameTopology: (name: string) => Promise<boolean>;
   onDeleteTopology: () => void;
+  onExportTopology: () => Promise<boolean>;
+  onImportTopology: (file: File) => Promise<boolean>;
 }
 
 export const TopologyManager: React.FC<TopologyManagerProps> = ({
@@ -19,9 +21,12 @@ export const TopologyManager: React.FC<TopologyManagerProps> = ({
   onCreateTopology,
   onRenameTopology,
   onDeleteTopology,
+  onExportTopology,
+  onImportTopology,
 }) => {
   const { t } = useI18n();
   const [topoForm] = Form.useForm();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <>
@@ -97,6 +102,22 @@ export const TopologyManager: React.FC<TopologyManagerProps> = ({
         <Button danger onClick={onDeleteTopology}>
           {t('topologies.delete')}
         </Button>
+        <Button disabled={!activeTopologyId} onClick={() => void onExportTopology()}>
+          {t('topologies.export')}
+        </Button>
+        <Button onClick={() => fileInputRef.current?.click()}>{t('topologies.import')}</Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={async event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            await onImportTopology(file);
+          }}
+        />
       </Space>
     </>
   );
