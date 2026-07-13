@@ -172,13 +172,31 @@ Copy `.env.example` to `.env` and adjust as needed:
 | `NETALIGN_DB_PATH` | `server/data/netalign.db` | SQLite database file path |
 | `CORS_ORIGINS` | (dev local origins) | Comma-separated allowed browser origins; empty in production denies cross-origin |
 | `PROTECTED_TOPOLOGY_IDS` | `topology-1` | Topology ids that cannot be deleted (seed safety) |
+| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` (JSON logs to stdout/stderr) |
+| `LOG_REQUESTS` | `true` in production | Set `1`/`true` to log each HTTP request; `0`/`false` to disable |
 | `VITE_API_BASE` | (unset → proxy/same-origin) | Frontend API origin at **build** time |
+
+### Health checks
+
+| Endpoint | Use | Success |
+|----------|-----|---------|
+| `GET /api/health` | Liveness (process up) | `200` `{ status: "ok", ... }` |
+| `GET /api/ready` | Readiness (SQLite query works) | `200` ready / `503` not_ready |
+
+Logs are one JSON object per line (`ts`, `level`, `msg`, plus fields). Sensitive keys (`password`, `token`, …) are redacted. Every response includes `x-request-id` (echoed from the request header when provided).
 
 ---
 
 ## API Endpoints
 
 All requests are prefixed with `/api`. Vite proxies `/api/*` from port 3000 to the backend on port 5000.
+
+### Health
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Liveness probe |
+| `GET` | `/api/ready` | Readiness probe (SQLite) |
 
 ### Topology Management
 
