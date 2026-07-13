@@ -8,10 +8,12 @@
     "dev:all": "concurrently -k -n server,web -c blue,magenta \"bun run server\" \"bun run dev\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "bun test --preload ./server/testPreload.ts --preload ./server/domPreload.ts shared server src/history src/api.test.ts src/api/client.test.ts src/i18n/translations.test.ts src/hooks/selectionUtils.test.ts src/components/GraphErrorBoundary.test.tsx",
+    "test": "bun test --preload ./server/testPreload.ts --preload ./server/domPreload.ts shared server scripts src/history src/api.test.ts src/api/client.test.ts src/i18n/translations.test.ts src/hooks/selectionUtils.test.ts src/components/GraphErrorBoundary.test.tsx",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
     "db:reset": "bun run scripts/db-reset.ts",
+    "db:backup": "bun run scripts/db-backup.ts",
+    "db:restore": "bun run scripts/db-restore.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "install:playwright": "playwright install chromium"

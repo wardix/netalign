@@ -3,15 +3,15 @@
  * and re-imports JSON seeds from server/data/ (when the DB is empty).
  *
  * Usage: bun run db:reset
+ *
+ * Prefer `bun run db:backup` before reset if you need to keep data.
  */
 import { existsSync, unlinkSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dbCompanionPaths, resolveDbPath } from './db-paths.ts';
 
-const dataDir = resolve(import.meta.dir, '../server/data');
-const defaultDb = join(dataDir, 'netalign.db');
-const dbPath = resolve(process.env.NETALIGN_DB_PATH || defaultDb);
+const dbPath = resolveDbPath();
 
-const candidates = [dbPath, `${dbPath}-wal`, `${dbPath}-shm`, `${dbPath}-journal`];
+const candidates = [dbPath, ...dbCompanionPaths(dbPath)];
 
 let removed = 0;
 for (const file of candidates) {

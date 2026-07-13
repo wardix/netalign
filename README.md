@@ -118,6 +118,38 @@ bun run dev      # UI  → http://localhost:3000 (proxies /api → 5000)
 
 Default seed file: `server/data/topology-1.json` (protected from delete; see `PROTECTED_TOPOLOGY_IDS`).
 
+#### Backup and restore (SQLite)
+
+The API uses **WAL mode** (`PRAGMA journal_mode = WAL`). Do **not** rely on a naive `cp netalign.db` while the server is writing — you can capture an incomplete snapshot. Prefer:
+
+**Backup** (safe while the server is running — uses SQLite `VACUUM INTO`):
+
+```bash
+bun run db:backup
+# → server/data/backups/netalign-<timestamp>.db
+
+# Or choose the destination path:
+bun run db:backup -- ./backups/prod-2026-07-13.db
+```
+
+**Restore** (stop the API first so nothing holds the file open):
+
+```bash
+# stop: Ctrl+C on `bun run server` / `docker compose stop`
+bun run db:restore -- ./server/data/backups/netalign-<timestamp>.db --force
+bun run server   # or docker compose up
+```
+
+Restore overwrites `NETALIGN_DB_PATH` and removes leftover `-wal` / `-shm` companions so SQLite does not replay stale WAL against the new file.
+
+| Mechanism | Scope | Notes |
+|-----------|--------|--------|
+| `db:backup` / `db:restore` | **Entire** SQLite DB (all topologies) | Ops / disaster recovery |
+| UI **Export / Import** | **One** topology as JSON | Share or migrate a single graph |
+| `db:reset` | Wipe local DB | Dev only; re-seeds from `server/data/*.json` |
+
+Env: `NETALIGN_BACKUP_DIR` (default `server/data/backups`). Keep backup files out of git (directory is gitignored via `*.db` patterns under `server/data/`).
+
 ### Scripts
 
 | Script | Description |
@@ -126,6 +158,8 @@ Default seed file: `server/data/topology-1.json` (protected from delete; see `PR
 | `bun run dev` | Vite dev server on port 3000 |
 | `bun run server` | Hono API server on port 5000 |
 | `bun run db:reset` | Delete local SQLite files (re-seed on next server start) |
+| `bun run db:backup` | Consistent SQLite snapshot (`VACUUM INTO`, WAL-safe) |
+| `bun run db:restore -- <file.db> [--force]` | Restore snapshot (stop the server first) |
 | `bun run build` | Type-check and build production bundle to `dist/` |
 | `bun run preview` | Preview the production build locally |
 | `bun run lint` | Run oxlint |

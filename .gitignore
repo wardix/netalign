@@ -17,9 +17,10 @@ bun-debug.log*
 .DS_Store
 Thumbs.db
 
-# SQLite database
+# SQLite database and backups
 server/data/*.db
 server/data/*.db-*
+server/data/backups/
 
 # Test artifacts
 test-results/
