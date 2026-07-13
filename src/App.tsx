@@ -18,17 +18,26 @@ interface TopologyInfo {
   name: string;
 }
 
+interface TopologyEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
 const App: React.FC = () => {
   const [topologies, setTopologies] = useState<TopologyInfo[]>([]);
   const [activeTopologyId, setActiveTopologyId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [selectedNodeData, setSelectedNodeData] = useState<any>(null);
-  const [selectedEdgeData, setSelectedEdgeData] = useState<any>(null);
-  const [nodeModalVisible, setNodeModalVisible] = useState(false);
-  const [edgeModalVisible, setEdgeModalVisible] = useState(false);
+  const [selectedNodeData, setSelectedNodeData] = useState<{
+    id: string;
+    label: string;
+    type: string;
+  } | null>(null);
+  const [selectedEdgeData, setSelectedEdgeData] = useState<TopologyEdge | null>(null);
   const [activeNodes, setActiveNodes] = useState<TopologyNode[]>([]);
+  const [activeEdges, setActiveEdges] = useState<TopologyEdge[]>([]);
   const [topoForm] = Form.useForm();
   const [nodeForm] = Form.useForm();
   const [edgeForm] = Form.useForm();
@@ -60,15 +69,27 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setSelectedNodeId(null);
+    setSelectedNodeData(null);
+    setSelectedEdgeId(null);
+    setSelectedEdgeData(null);
+  }, [activeTopologyId]);
+
+  useEffect(() => {
     if (!activeTopologyId) {
       setActiveNodes([]);
+      setActiveEdges([]);
       return;
     }
     loadTopologyDetail(activeTopologyId)
-      .then(data => setActiveNodes(data.nodes ?? []))
+      .then(data => {
+        setActiveNodes(data.nodes ?? []);
+        setActiveEdges(data.edges ?? []);
+      })
       .catch(err => {
-        console.error('Failed to load topology nodes', err);
+        console.error('Failed to load topology detail', err);
         setActiveNodes([]);
+        setActiveEdges([]);
       });
   }, [activeTopologyId, refreshKey]);
 
@@ -83,6 +104,32 @@ const App: React.FC = () => {
     }
     nodeDetailForm.setFieldsValue({ label: selectedNodeData.label });
   }, [selectedNodeData, nodeDetailForm]);
+
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    const node = activeNodes.find(n => n.id === selectedNodeId);
+    if (!node) {
+      setSelectedNodeId(null);
+      setSelectedNodeData(null);
+      return;
+    }
+    setSelectedNodeData({
+      id: node.id,
+      label: node.data?.label || node.id,
+      type: node.type,
+    });
+  }, [activeNodes, selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedEdgeId) return;
+    const edge = activeEdges.find(e => e.id === selectedEdgeId);
+    if (!edge) {
+      setSelectedEdgeId(null);
+      setSelectedEdgeData(null);
+      return;
+    }
+    setSelectedEdgeData(edge);
+  }, [activeEdges, selectedEdgeId]);
 
   const edgeSource = Form.useWatch('source', edgeForm);
 
@@ -105,43 +152,27 @@ const App: React.FC = () => {
   );
 
   const handleNodeSelect = (nodeId: string) => {
+    const node = activeNodes.find(n => n.id === nodeId);
+    if (!node) return;
+
     setSelectedNodeId(nodeId);
     setSelectedEdgeId(null);
     setSelectedEdgeData(null);
-    if (!activeTopologyId) return;
-    loadTopologyDetail(activeTopologyId)
-      .then(data => {
-        const node = data.nodes.find((n: { id: string }) => n.id === nodeId);
-        if (!node) return;
-        setSelectedNodeData({
-          id: node.id,
-          label: node.data?.label || node.id,
-          type: node.type,
-        });
-        setNodeModalVisible(true);
-      })
-      .catch(err => {
-        console.error('Failed node detail', err);
-        message.error('Failed to load node details');
-      });
+    setSelectedNodeData({
+      id: node.id,
+      label: node.data?.label || node.id,
+      type: node.type,
+    });
   };
 
   const handleEdgeSelect = (edgeId: string) => {
+    const edge = activeEdges.find(e => e.id === edgeId);
+    if (!edge) return;
+
     setSelectedEdgeId(edgeId);
     setSelectedNodeId(null);
     setSelectedNodeData(null);
-    if (!activeTopologyId) return;
-    loadTopologyDetail(activeTopologyId)
-      .then(data => {
-        const edge = data.edges.find((e: { id: string }) => e.id === edgeId);
-        if (!edge) return;
-        setSelectedEdgeData(edge);
-        setEdgeModalVisible(true);
-      })
-      .catch(err => {
-        console.error('Failed edge detail', err);
-        message.error('Failed to load edge details');
-      });
+    setSelectedEdgeData(edge);
   };
 
   // --- Topology actions ---
@@ -259,7 +290,6 @@ const App: React.FC = () => {
             message.success('Node deleted');
             setSelectedNodeId(null);
             setSelectedNodeData(null);
-            setNodeModalVisible(false);
             setRefreshKey(k => k + 1);
           })
           .catch(err => {
@@ -339,7 +369,6 @@ const App: React.FC = () => {
             message.success('Edge deleted');
             setSelectedEdgeId(null);
             setSelectedEdgeData(null);
-            setEdgeModalVisible(false);
             setRefreshKey(k => k + 1);
           })
           .catch(err => {
@@ -483,23 +512,33 @@ const App: React.FC = () => {
             </Button>
           </Form>
 
-          {/* Selected item actions */}
-          {selectedNodeId && (
+          {selectedNodeId && selectedNodeData && (
             <>
               <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Node</Divider>
-              <Space>
-                <span style={{ color: '#fff' }}>{selectedNodeId}</span>
-                <Button danger onClick={() => deleteNode(selectedNodeId)}>Delete Node</Button>
-              </Space>
+              <Form form={nodeDetailForm} layout="vertical" onFinish={updateNodeLabel}>
+                <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
+                  <Descriptions.Item label="ID">{selectedNodeData.id}</Descriptions.Item>
+                  <Descriptions.Item label="Type">{selectedNodeData.type}</Descriptions.Item>
+                </Descriptions>
+                <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label is required' }]}>
+                  <Input />
+                </Form.Item>
+                <Space style={{ width: '100%' }}>
+                  <Button type="primary" htmlType="submit">Save</Button>
+                  <Button danger onClick={() => deleteNode(selectedNodeId)}>Delete</Button>
+                </Space>
+              </Form>
             </>
           )}
-          {selectedEdgeId && (
+          {selectedEdgeId && selectedEdgeData && (
             <>
               <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Edge</Divider>
-              <Space>
-                <span style={{ color: '#fff' }}>{selectedEdgeId}</span>
-                <Button danger onClick={() => deleteEdge(selectedEdgeId)}>Delete Edge</Button>
-              </Space>
+              <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
+                <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
+                <Descriptions.Item label="Source">{selectedEdgeData.source}</Descriptions.Item>
+                <Descriptions.Item label="Target">{selectedEdgeData.target}</Descriptions.Item>
+              </Descriptions>
+              <Button danger block onClick={() => deleteEdge(selectedEdgeId)}>Delete Edge</Button>
             </>
           )}
         </Sider>
@@ -515,56 +554,7 @@ const App: React.FC = () => {
             onNodeSelect={handleNodeSelect}
             onEdgeSelect={handleEdgeSelect}
           />
-          <Modal
-            title="Node Details"
-            open={nodeModalVisible}
-            onCancel={() => setNodeModalVisible(false)}
-            footer={[
-              <Button key="close" onClick={() => setNodeModalVisible(false)}>
-                Close
-              </Button>,
-              <Button
-                key="save"
-                type="primary"
-                onClick={() => nodeDetailForm.submit()}
-                disabled={!selectedNodeData}
-              >
-                Save
-              </Button>,
-            ]}
-          >
-            {selectedNodeData ? (
-              <Form form={nodeDetailForm} layout="vertical" onFinish={updateNodeLabel}>
-                <Form.Item label="ID">
-                  <Input value={selectedNodeData.id} disabled />
-                </Form.Item>
-                <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label is required' }]}>
-                  <Input />
-                </Form.Item>
-                <Form.Item label="Type">
-                  <Input value={selectedNodeData.type} disabled />
-                </Form.Item>
-              </Form>
-            ) : (
-              <p>Loading...</p>
-            )}
-          </Modal>
-
-          <Modal
-            title="Edge Details"
-            open={edgeModalVisible}
-            onCancel={() => setEdgeModalVisible(false)}
-            footer={<Button onClick={() => setEdgeModalVisible(false)}>Close</Button>}
-          >
-            {selectedEdgeData ? (
-              <Descriptions column={1} bordered size="small">
-                <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
-                <Descriptions.Item label="Source">{selectedEdgeData.source}</Descriptions.Item>
-                <Descriptions.Item label="Target">{selectedEdgeData.target}</Descriptions.Item>
-              </Descriptions>
-            ) : <p>Loading...</p>}
-          </Modal>
-</Content>
+        </Content>
       </Layout>
       </Layout>
   );
