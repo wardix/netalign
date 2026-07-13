@@ -2,26 +2,36 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions } from 'antd';
 import TopologyGraph from './components/TopologyGraph';
+import { getApiErrorMessage } from './api/client.ts';
+import { topologyApi } from './api/topologies.ts';
+import { useTopologies } from './hooks/useTopologies.ts';
+import { useTopology } from './hooks/useTopology.ts';
 import { useI18n } from './i18n/I18nProvider.tsx';
 import { translateApiError } from './i18n/translations.ts';
-import { API_BASE } from './api';
 import { getGatewayValidationError } from '../shared/edgeGateway.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import {
   formatNodeOptionLabel,
   getValidTargetNodes,
   sortNodesByLabel,
-  type TopologyNode,
 } from '../shared/topologyNodes.ts';
-import type { TopologyEdge, TopologySummary } from '../shared/types.ts';
+import type { TopologyEdge, TopologyNodeTypeValue } from '../shared/types.ts';
 
 const { Header, Sider, Content } = Layout;
 
 const App: React.FC = () => {
   const { t, locale, setLocale } = useI18n();
-  const [topologies, setTopologies] = useState<TopologySummary[]>([]);
+  const { topologies, error: topologiesError, refresh: refreshTopologies } = useTopologies(
+    t('topologies.loadFailed'),
+  );
   const [activeTopologyId, setActiveTopologyId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const {
+    nodes: activeNodes,
+    edges: activeEdges,
+    loading: topologyLoading,
+    error: topologyError,
+  } = useTopology(activeTopologyId, refreshKey, t('canvas.loadFailedDetail'));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<{
@@ -30,40 +40,23 @@ const App: React.FC = () => {
     type: string;
   } | null>(null);
   const [selectedEdgeData, setSelectedEdgeData] = useState<TopologyEdge | null>(null);
-  const [activeNodes, setActiveNodes] = useState<TopologyNode[]>([]);
-  const [activeEdges, setActiveEdges] = useState<TopologyEdge[]>([]);
-  const [topologyLoading, setTopologyLoading] = useState(false);
-  const [topologyError, setTopologyError] = useState<string | null>(null);
   const [topoForm] = Form.useForm();
   const [nodeForm] = Form.useForm();
   const [edgeForm] = Form.useForm();
   const [nodeDetailForm] = Form.useForm();
   const [edgeDetailForm] = Form.useForm();
 
-  // Load topologies list
-  const loadTopologies = (selectId?: string) => {
-    fetch(`${API_BASE}/api/topologies`)
-      .then(res => res.json())
-      .then((data: TopologySummary[]) => {
-        setTopologies(data);
-        const targetId = selectId || data[0]?.id || null;
-        setActiveTopologyId(targetId);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(t('topologies.loadFailed'));
-      });
-  };
-
-  const loadTopologyDetail = (topologyId: string) =>
-    fetch(`${API_BASE}/api/topologies/${topologyId}`).then(res => {
-      if (!res.ok) throw new Error('Failed to load topology');
-      return res.json();
-    });
+  useEffect(() => {
+    if (topologiesError) {
+      message.error(topologiesError);
+    }
+  }, [topologiesError]);
 
   useEffect(() => {
-    loadTopologies();
-  }, []);
+    if (topologies.length > 0 && !activeTopologyId) {
+      setActiveTopologyId(topologies[0].id);
+    }
+  }, [topologies, activeTopologyId]);
 
   useEffect(() => {
     setSelectedNodeId(null);
@@ -71,41 +64,6 @@ const App: React.FC = () => {
     setSelectedEdgeId(null);
     setSelectedEdgeData(null);
   }, [activeTopologyId]);
-
-  useEffect(() => {
-    if (!activeTopologyId) {
-      setActiveNodes([]);
-      setActiveEdges([]);
-      setTopologyLoading(false);
-      setTopologyError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setTopologyLoading(true);
-    setTopologyError(null);
-
-    loadTopologyDetail(activeTopologyId)
-      .then(data => {
-        if (cancelled) return;
-        setActiveNodes(data.nodes ?? []);
-        setActiveEdges(data.edges ?? []);
-      })
-      .catch(err => {
-        if (cancelled) return;
-        console.error('Failed to load topology detail', err);
-        setActiveNodes([]);
-        setActiveEdges([]);
-        setTopologyError(t('canvas.loadFailedDetail'));
-      })
-      .finally(() => {
-        if (!cancelled) setTopologyLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTopologyId, refreshKey, t]);
 
   useEffect(() => {
     edgeForm.resetFields();
@@ -173,6 +131,8 @@ const App: React.FC = () => {
     [edgeSource, activeNodes],
   );
 
+  const bumpTopology = () => setRefreshKey(k => k + 1);
+
   const handleNodeSelect = (nodeId: string) => {
     const node = activeNodes.find(n => n.id === nodeId);
     if (!node) return;
@@ -197,47 +157,29 @@ const App: React.FC = () => {
     setSelectedEdgeData(edge);
   };
 
-  // --- Topology actions ---
-  const createTopology = (name: string) => {
-    fetch(`${API_BASE}/api/topologies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Create failed');
-        return res.json();
-      })
-      .then(newTopo => {
-        message.success(t('topologies.created', { name: newTopo.name }));
-        loadTopologies(newTopo.id);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(t('topologies.createFailed'));
-      });
+  const createTopology = async (name: string) => {
+    try {
+      const newTopo = await topologyApi.create(name);
+      message.success(t('topologies.created', { name: newTopo.name }));
+      await refreshTopologies();
+      setActiveTopologyId(newTopo.id);
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('topologies.createFailed')), t));
+    }
   };
 
-  const renameTopology = (name: string) => {
+  const renameTopology = async (name: string) => {
     if (!activeTopologyId) return;
 
-    fetch(`${API_BASE}/api/topologies/${activeTopologyId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-      .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('topologies.renameFailed')); });
-        return res.json();
-      })
-      .then(updated => {
-        message.success(t('topologies.renamed', { name: updated.name }));
-        loadTopologies(activeTopologyId);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(translateApiError(err.message || t('topologies.renameFailed'), t));
-      });
+    try {
+      const updated = await topologyApi.rename(activeTopologyId, name);
+      message.success(t('topologies.renamed', { name: updated.name }));
+      await refreshTopologies();
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('topologies.renameFailed')), t));
+    }
   };
 
   const deleteTopology = () => {
@@ -249,104 +191,79 @@ const App: React.FC = () => {
     Modal.confirm({
       title: t('topologies.deleteTitle'),
       content: t('topologies.deleteContent'),
-      onOk: () => {
-        fetch(`${API_BASE}/api/topologies/${activeTopologyId}`, { method: 'DELETE' })
-          .then(res => {
-            if (!res.ok) throw new Error('Delete failed');
-            return res.json();
-          })
-          .then(() => {
-            message.success(t('topologies.deleted'));
-            loadTopologies();
-          })
-          .catch(err => {
-            console.error(err);
-            message.error(t('topologies.deleteFailed'));
-          });
+      onOk: async () => {
+        try {
+          await topologyApi.delete(activeTopologyId);
+          message.success(t('topologies.deleted'));
+          const data = await refreshTopologies();
+          setActiveTopologyId(data[0]?.id ?? null);
+        } catch (err) {
+          console.error(err);
+          message.error(translateApiError(getApiErrorMessage(err, t('topologies.deleteFailed')), t));
+        }
       },
     });
   };
 
-  // --- Node actions ---
-  const addNode = (values: any) => {
+  const addNode = async (values: {
+    nodeId: string;
+    nodeType: TopologyNodeTypeValue;
+    nodeLabel: string;
+  }) => {
     if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
     const nodeId = values.nodeId.trim().toLowerCase().replace(/\s+/g, '-');
-    const payload = { nodeId, type: values.nodeType, label: values.nodeLabel };
-    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('nodes.addFailed')); });
-        return res.json();
-      })
-      .then(() => {
-        message.success(t('nodes.added'));
-        nodeForm.resetFields();
-        setRefreshKey(k => k + 1);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(translateApiError(err.message || t('nodes.addFailed'), t));
+
+    try {
+      await topologyApi.addNode(activeTopologyId, {
+        nodeId,
+        type: values.nodeType,
+        label: values.nodeLabel,
       });
+      message.success(t('nodes.added'));
+      nodeForm.resetFields();
+      bumpTopology();
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('nodes.addFailed')), t));
+    }
   };
 
-  const saveNodePositions = (updates: { nodeId: string; position: { x: number; y: number } }[]) => {
+  const saveNodePositions = async (updates: { nodeId: string; position: { x: number; y: number } }[]) => {
     if (!activeTopologyId || updates.length === 0) return;
 
-    Promise.all(
-      updates.map(({ nodeId, position }) =>
-        fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${nodeId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ position }),
-        }).then(res => {
-          if (!res.ok) {
-            return res.json().then(e => {
-              throw new Error(e.error || t('nodes.positionSaveFailed'));
-            });
-          }
-          return res.json();
-        }),
-      ),
-    )
-      .then(() => {
-        message.success(t('nodes.positionSaved'));
-        setRefreshKey(k => k + 1);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(translateApiError(err.message || t('nodes.positionSaveFailed'), t));
-        setRefreshKey(k => k + 1);
-      });
+    try {
+      await Promise.all(
+        updates.map(({ nodeId, position }) =>
+          topologyApi.updateNodePosition(activeTopologyId, nodeId, position),
+        ),
+      );
+      message.success(t('nodes.positionSaved'));
+      bumpTopology();
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('nodes.positionSaveFailed')), t));
+      bumpTopology();
+    }
   };
 
-  const updateNodeLabel = (values: { label: string }) => {
+  const updateNodeLabel = async (values: { label: string }) => {
     if (!activeTopologyId || !selectedNodeData) return;
 
-    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${selectedNodeData.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: values.label }),
-    })
-      .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('nodes.updateFailed')); });
-        return res.json();
-      })
-      .then(updatedNode => {
-        message.success(t('nodes.updated'));
-        setSelectedNodeData({
-          id: updatedNode.id,
-          label: updatedNode.data?.label || updatedNode.id,
-          type: updatedNode.type,
-        });
-        setRefreshKey(k => k + 1);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(translateApiError(err.message || t('nodes.updateFailed'), t));
+    try {
+      const updatedNode = await topologyApi.updateNode(activeTopologyId, selectedNodeData.id, {
+        label: values.label,
       });
+      message.success(t('nodes.updated'));
+      setSelectedNodeData({
+        id: updatedNode.id,
+        label: updatedNode.data?.label || updatedNode.id,
+        type: updatedNode.type,
+      });
+      bumpTopology();
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('nodes.updateFailed')), t));
+    }
   };
 
   const deleteNode = (nodeId: string) => {
@@ -354,22 +271,17 @@ const App: React.FC = () => {
     Modal.confirm({
       title: t('nodes.deleteTitle', { id: nodeId }),
       content: t('nodes.deleteContent'),
-      onOk: () => {
-        fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${nodeId}`, { method: 'DELETE' })
-          .then(res => {
-            if (!res.ok) throw new Error('Delete node failed');
-            return res.json();
-          })
-          .then(() => {
-            message.success(t('nodes.deleted'));
-            setSelectedNodeId(null);
-            setSelectedNodeData(null);
-            setRefreshKey(k => k + 1);
-          })
-          .catch(err => {
-            console.error(err);
-            message.error(t('nodes.deleteFailed'));
-          });
+      onOk: async () => {
+        try {
+          await topologyApi.deleteNode(activeTopologyId, nodeId);
+          message.success(t('nodes.deleted'));
+          setSelectedNodeId(null);
+          setSelectedNodeData(null);
+          bumpTopology();
+        } catch (err) {
+          console.error(err);
+          message.error(translateApiError(getApiErrorMessage(err, t('nodes.deleteFailed')), t));
+        }
       },
     });
   };
@@ -396,7 +308,6 @@ const App: React.FC = () => {
     return topologyError ? translateApiError(topologyError, t) : null;
   };
 
-  // --- Edge actions ---
   const validateGatewayField = (value: string | undefined): string | null => {
     const trimmed = value?.trim() || '';
     if (!trimmed) return null;
@@ -404,7 +315,7 @@ const App: React.FC = () => {
     return error ? translateApiError(error, t) : null;
   };
 
-  const addEdge = (values: { source: string; target: string; gateway?: string }) => {
+  const addEdge = async (values: { source: string; target: string; gateway?: string }) => {
     if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
 
     const validationError = validateEdgeForm(values.source, values.target);
@@ -425,27 +336,19 @@ const App: React.FC = () => {
     };
     const gateway = values.gateway?.trim();
     if (gateway) payload.gateway = gateway;
-    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('edges.addFailed')); });
-        return res.json();
-      })
-      .then(() => {
-        message.success(t('edges.added'));
-        edgeForm.resetFields();
-        setRefreshKey(k => k + 1);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(translateApiError(err.message || t('edges.addFailed'), t));
-      });
+
+    try {
+      await topologyApi.addEdge(activeTopologyId, payload);
+      message.success(t('edges.added'));
+      edgeForm.resetFields();
+      bumpTopology();
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('edges.addFailed')), t));
+    }
   };
 
-  const updateEdgeGateway = (values: { gateway?: string }) => {
+  const updateEdgeGateway = async (values: { gateway?: string }) => {
     if (!activeTopologyId || !selectedEdgeData) return;
 
     const gatewayError = validateGatewayField(values.gateway);
@@ -454,48 +357,34 @@ const App: React.FC = () => {
       return;
     }
 
-    const gateway = values.gateway?.trim() || '';
-
-    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${selectedEdgeData.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gateway }),
-    })
-      .then(res => {
-        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('edges.updateFailed')); });
-        return res.json();
-      })
-      .then(updatedEdge => {
-        message.success(t('edges.updated'));
-        setSelectedEdgeData(updatedEdge);
-        setRefreshKey(k => k + 1);
-      })
-      .catch(err => {
-        console.error(err);
-        message.error(translateApiError(err.message || t('edges.updateFailed'), t));
+    try {
+      const updatedEdge = await topologyApi.updateEdge(activeTopologyId, selectedEdgeData.id, {
+        gateway: values.gateway?.trim() || '',
       });
+      message.success(t('edges.updated'));
+      setSelectedEdgeData(updatedEdge);
+      bumpTopology();
+    } catch (err) {
+      console.error(err);
+      message.error(translateApiError(getApiErrorMessage(err, t('edges.updateFailed')), t));
+    }
   };
 
   const deleteEdge = (edgeId: string) => {
     if (!activeTopologyId) return;
     Modal.confirm({
       title: t('edges.deleteTitle', { id: edgeId }),
-      onOk: () => {
-        fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${edgeId}`, { method: 'DELETE' })
-          .then(res => {
-            if (!res.ok) throw new Error('Delete edge failed');
-            return res.json();
-          })
-          .then(() => {
-            message.success(t('edges.deleted'));
-            setSelectedEdgeId(null);
-            setSelectedEdgeData(null);
-            setRefreshKey(k => k + 1);
-          })
-          .catch(err => {
-            console.error(err);
-            message.error(t('edges.deleteFailed'));
-          });
+      onOk: async () => {
+        try {
+          await topologyApi.deleteEdge(activeTopologyId, edgeId);
+          message.success(t('edges.deleted'));
+          setSelectedEdgeId(null);
+          setSelectedEdgeData(null);
+          bumpTopology();
+        } catch (err) {
+          console.error(err);
+          message.error(translateApiError(getApiErrorMessage(err, t('edges.deleteFailed')), t));
+        }
       },
     });
   };
@@ -544,9 +433,9 @@ const App: React.FC = () => {
             value={activeTopologyId || undefined}
             onChange={id => setActiveTopologyId(id)}
           >
-            {topologies.map(t => (
-              <Select.Option key={t.id} value={t.id}>
-                {t.name}
+            {topologies.map(topology => (
+              <Select.Option key={topology.id} value={topology.id}>
+                {topology.name}
               </Select.Option>
             ))}
           </Select>
@@ -563,7 +452,7 @@ const App: React.FC = () => {
                 ),
                 onOk: async () => {
                   const values = await topoForm.validateFields();
-                  createTopology(values.name);
+                  await createTopology(values.name);
                   topoForm.resetFields();
                 },
                 okText: t('topologies.create'),
@@ -573,7 +462,7 @@ const App: React.FC = () => {
             <Button
               disabled={!activeTopologyId}
               onClick={() => {
-                const currentName = topologies.find(t => t.id === activeTopologyId)?.name || '';
+                const currentName = topologies.find(topology => topology.id === activeTopologyId)?.name || '';
                 topoForm.setFieldsValue({ name: currentName });
                 Modal.confirm({
                   title: t('topologies.renameTitle'),
@@ -586,7 +475,7 @@ const App: React.FC = () => {
                   ),
                   onOk: async () => {
                     const values = await topoForm.validateFields();
-                    renameTopology(values.name);
+                    await renameTopology(values.name);
                     topoForm.resetFields();
                   },
                   okText: t('topologies.save'),
@@ -723,7 +612,7 @@ const App: React.FC = () => {
             loading={topologyLoading}
             error={topologyError}
             hasTopology={!!activeTopologyId}
-            onRetry={() => setRefreshKey(k => k + 1)}
+            onRetry={bumpTopology}
             onNodeSelect={handleNodeSelect}
             onEdgeSelect={handleEdgeSelect}
             onNodePositionsChange={saveNodePositions}
