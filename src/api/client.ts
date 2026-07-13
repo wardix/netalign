@@ -1,31 +1,38 @@
 import { API_BASE } from '../api.ts';
+import { isApiErrorCode, type ApiErrorCode } from '../../shared/apiErrors.ts';
 
 export class ApiError extends Error {
   status: number;
+  code?: ApiErrorCode;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: ApiErrorCode) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
 interface ApiErrorBody {
   error?: string;
+  code?: string;
 }
 
-async function readErrorMessage(res: Response): Promise<string> {
+async function readErrorBody(res: Response): Promise<{ message: string; code?: ApiErrorCode }> {
   try {
     const body = (await res.json()) as ApiErrorBody;
-    return body.error || res.statusText || 'Request failed';
+    const message = body.error || res.statusText || 'Request failed';
+    const code = isApiErrorCode(body.code) ? body.code : undefined;
+    return { message, code };
   } catch {
-    return res.statusText || 'Request failed';
+    return { message: res.statusText || 'Request failed' };
   }
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    throw new ApiError(await readErrorMessage(res), res.status);
+    const { message, code } = await readErrorBody(res);
+    throw new ApiError(message, res.status, code);
   }
   return (await res.json()) as T;
 }
@@ -75,4 +82,9 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error && error.message) return error.message;
   return fallback;
+}
+
+export function getApiErrorCode(error: unknown): ApiErrorCode | undefined {
+  if (error instanceof ApiError) return error.code;
+  return undefined;
 }

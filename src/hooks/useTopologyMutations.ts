@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { message, Modal } from 'antd';
-import { getApiErrorMessage } from '../api/client.ts';
+import { ApiError, getApiErrorMessage } from '../api/client.ts';
 import { topologyApi } from '../api/topologies.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { translateApiError } from '../i18n/translations.ts';
@@ -100,6 +100,10 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
   const showApiError = useCallback(
     (err: unknown, fallbackKey: Parameters<typeof t>[0]) => {
       console.error(err);
+      if (err instanceof ApiError) {
+        message.error(translateApiError(err, t));
+        return;
+      }
       message.error(translateApiError(getApiErrorMessage(err, t(fallbackKey)), t));
     },
     [t],

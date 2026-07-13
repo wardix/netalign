@@ -149,11 +149,13 @@ describe('topology CRUD API', () => {
     expect(del.status).toBe(403);
     const body = await del.json();
     expect(body.error).toBe('This topology is protected and cannot be deleted');
+    expect(body.code).toBe('TOPOLOGY_PROTECTED');
 
     const legacy = await server.fetch(
       new Request('http://localhost/api/topologies/topology-1/delete', { method: 'POST' }),
     );
     expect(legacy.status).toBe(403);
+    expect(legacy.headers.get('Deprecation')).toBe('true');
 
     const stillThere = await server.fetch(
       new Request('http://localhost/api/topologies/topology-1'),

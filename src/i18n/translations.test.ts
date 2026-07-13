@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { ApiError } from '../api/client.ts';
 import { formatMessage, translateApiError, translations } from './translations.ts';
 
 describe('formatMessage', () => {
@@ -26,6 +27,11 @@ describe('translateApiError', () => {
     expect(translateApiError('This topology is protected and cannot be deleted', t)).toBe(
       translations.en['topologies.protectedDeleteError'],
     );
+  });
+
+  test('prefers stable error codes on ApiError', () => {
+    const err = new ApiError('whatever English text', 403, 'TOPOLOGY_PROTECTED');
+    expect(translateApiError(err, t)).toBe(translations.en['topologies.protectedDeleteError']);
   });
 
   test('returns original message when unmapped', () => {

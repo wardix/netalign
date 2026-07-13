@@ -38,9 +38,9 @@ describe('apiGet / apiPost', () => {
     expect(data.name).toBe('Default');
   });
 
-  test('apiGet throws ApiError with server error body', async () => {
+  test('apiGet throws ApiError with server error body and code', async () => {
     globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify({ error: 'Topology not found' }), {
+      new Response(JSON.stringify({ error: 'Topology not found', code: 'TOPOLOGY_NOT_FOUND' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -53,6 +53,7 @@ describe('apiGet / apiPost', () => {
       expect(err).toBeInstanceOf(ApiError);
       expect((err as ApiError).status).toBe(404);
       expect((err as ApiError).message).toBe('Topology not found');
+      expect((err as ApiError).code).toBe('TOPOLOGY_NOT_FOUND');
     }
   });
 

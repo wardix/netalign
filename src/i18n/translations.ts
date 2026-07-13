@@ -1,3 +1,6 @@
+import type { ApiErrorCode } from '../../shared/apiErrors.ts';
+import { ApiError } from '../api/client.ts';
+
 export type Locale = 'id' | 'en';
 
 export type TranslationKey = keyof typeof translations.id;
@@ -229,6 +232,36 @@ export const translations = {
   },
 } as const;
 
+/** Prefer stable API codes over free-form message matching. */
+const API_ERROR_CODE_MAP: Partial<Record<ApiErrorCode, TranslationKey>> = {
+  EDGE_INVALID_CONNECTION: 'error.edge.invalidConnection',
+  EDGE_DUPLICATE: 'error.edge.duplicate',
+  EDGE_ENDPOINTS_REQUIRED: 'error.edge.missingEndpoints',
+  EDGE_SAME_NODE: 'error.edge.sameNode',
+  EDGE_NODES_MISSING: 'error.edge.nodesMissing',
+  EDGE_GATEWAY_INVALID: 'error.gateway.invalidChars',
+  EDGE_ADD_FAILED: 'edges.addFailed',
+  EDGE_UPDATE_FAILED: 'edges.updateFailed',
+  EDGE_DELETE_FAILED: 'edges.deleteFailed',
+  NODE_LABEL_REQUIRED: 'nodes.labelRequired',
+  NODE_UPDATE_FIELDS_REQUIRED: 'nodes.updateFailed',
+  NODE_POSITION_INVALID: 'nodes.positionSaveFailed',
+  NODE_ADD_FAILED: 'nodes.addFailed',
+  NODE_UPDATE_FAILED: 'nodes.updateFailed',
+  NODE_DELETE_FAILED: 'nodes.deleteFailed',
+  NODE_POSITIONS_UPDATE_FAILED: 'nodes.positionSaveFailed',
+  TOPOLOGY_PROTECTED: 'topologies.protectedDeleteError',
+  TOPOLOGY_NAME_REQUIRED: 'topologies.renameFailed',
+  TOPOLOGY_CREATE_FAILED: 'topologies.createFailed',
+  TOPOLOGY_UPDATE_FAILED: 'topologies.renameFailed',
+  TOPOLOGY_DELETE_FAILED: 'topologies.deleteFailed',
+  TOPOLOGY_LIST_FAILED: 'topologies.loadFailed',
+  TOPOLOGY_READ_FAILED: 'canvas.loadFailed',
+  IMPORT_INVALID: 'topologies.importFailed',
+  IMPORT_FAILED: 'topologies.importFailed',
+};
+
+/** Legacy message map (fallback when `code` is absent). */
 const API_ERROR_MAP: Record<string, TranslationKey> = {
   'Invalid connection: routers and instances can only connect directly to subnets.':
     'error.edge.invalidConnection',
@@ -262,7 +295,22 @@ const API_ERROR_MAP: Record<string, TranslationKey> = {
   'Import edge source and target must be different nodes': 'topologies.importFailed',
 };
 
-export function translateApiError(message: string, t: (key: TranslationKey) => string): string {
+export function translateApiError(
+  messageOrError: string | unknown,
+  t: (key: TranslationKey) => string,
+): string {
+  if (messageOrError instanceof ApiError && messageOrError.code) {
+    const byCode = API_ERROR_CODE_MAP[messageOrError.code];
+    if (byCode) return t(byCode);
+  }
+
+  const message =
+    typeof messageOrError === 'string'
+      ? messageOrError
+      : messageOrError instanceof Error
+        ? messageOrError.message
+        : String(messageOrError ?? '');
+
   const key = API_ERROR_MAP[message];
   if (key) return t(key);
   return message;
