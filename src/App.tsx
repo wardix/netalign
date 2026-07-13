@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions } from 'antd';
 import TopologyGraph from './components/TopologyGraph';
 import { API_BASE } from './api';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
+import {
+  formatNodeOptionLabel,
+  getValidTargetNodes,
+  sortNodesByLabel,
+  type TopologyNode,
+} from '../shared/topologyNodes.ts';
 
 const { Header, Sider, Content } = Layout;
 
 interface TopologyInfo {
   id: string;
   name: string;
-}
-
-interface TopologyNode {
-  id: string;
-  type: string;
 }
 
 const App: React.FC = () => {
@@ -28,6 +29,9 @@ const App: React.FC = () => {
   const [nodeModalVisible, setNodeModalVisible] = useState(false);
   const [edgeModalVisible, setEdgeModalVisible] = useState(false);
   const [activeNodes, setActiveNodes] = useState<TopologyNode[]>([]);
+  const [topoForm] = Form.useForm();
+  const [nodeForm] = Form.useForm();
+  const [edgeForm] = Form.useForm();
 
   // Load topologies list
   const loadTopologies = (selectId?: string) => {
@@ -66,6 +70,30 @@ const App: React.FC = () => {
         setActiveNodes([]);
       });
   }, [activeTopologyId, refreshKey]);
+
+  useEffect(() => {
+    edgeForm.resetFields();
+  }, [activeTopologyId, edgeForm]);
+
+  const edgeSource = Form.useWatch('source', edgeForm);
+
+  const sourceOptions = useMemo(
+    () =>
+      sortNodesByLabel(activeNodes).map(node => ({
+        value: node.id,
+        label: formatNodeOptionLabel(node),
+      })),
+    [activeNodes],
+  );
+
+  const targetOptions = useMemo(
+    () =>
+      getValidTargetNodes(edgeSource, activeNodes).map(node => ({
+        value: node.id,
+        label: formatNodeOptionLabel(node),
+      })),
+    [edgeSource, activeNodes],
+  );
 
   const handleNodeSelect = (nodeId: string) => {
     setSelectedNodeId(nodeId);
@@ -286,11 +314,6 @@ const App: React.FC = () => {
     });
   };
 
-  // Forms for creating new topology / node / edge
-  const [topoForm] = Form.useForm();
-  const [nodeForm] = Form.useForm();
-  const [edgeForm] = Form.useForm();
-
   return (
     <Layout style={{ height: '100vh', background: '#0e1117' }}>
       <Header style={{
@@ -369,15 +392,22 @@ const App: React.FC = () => {
 
           <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Edge</Divider>
           <Form form={edgeForm} layout="vertical" onFinish={addEdge} style={{ marginBottom: 12 }}>
-            <Form.Item name="source" label="Source" rules={[{ required: true }]}>
-              <Input />
+            <Form.Item name="source" label="Source" rules={[{ required: true, message: 'Select a source node' }]}>
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder={activeNodes.length ? 'Select source node' : 'No nodes in topology'}
+                disabled={activeNodes.length === 0}
+                options={sourceOptions}
+                onChange={() => edgeForm.setFieldValue('target', undefined)}
+              />
             </Form.Item>
             <Form.Item
               name="target"
               label="Target"
               dependencies={['source']}
               rules={[
-                { required: true },
+                { required: true, message: 'Select a target node' },
                 {
                   validator: async (_, value) => {
                     const source = edgeForm.getFieldValue('source');
@@ -388,9 +418,23 @@ const App: React.FC = () => {
                 },
               ]}
             >
-              <Input />
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder={
+                  !edgeSource
+                    ? 'Select source first'
+                    : targetOptions.length
+                      ? 'Select target node'
+                      : 'No valid targets for this source'
+                }
+                disabled={!edgeSource || targetOptions.length === 0}
+                options={targetOptions}
+              />
             </Form.Item>
-            <Button type="primary" htmlType="submit" block>Add Edge</Button>
+            <Button type="primary" htmlType="submit" block disabled={activeNodes.length === 0}>
+              Add Edge
+            </Button>
           </Form>
 
           {/* Selected item actions */}
