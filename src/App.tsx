@@ -1,9 +1,10 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Layout, message, Spin } from 'antd';
 import { useTopologies } from './hooks/useTopologies.ts';
 import { useTopology } from './hooks/useTopology.ts';
 import { useSelection } from './hooks/useSelection.ts';
 import { useTopologyMutations } from './hooks/useTopologyMutations.ts';
+import { useCommandHistory } from './hooks/useCommandHistory.ts';
 import { useI18n } from './i18n/I18nProvider.tsx';
 import { AppHeader } from './components/AppHeader.tsx';
 import { TopologySidebar } from './components/TopologySidebar.tsx';
@@ -35,12 +36,21 @@ const App: React.FC = () => {
   } = useTopology(activeTopologyId, refreshKey, t('canvas.loadFailedDetail'));
 
   const selection = useSelection(activeTopologyId, activeNodes, activeEdges);
-  const bumpTopology = () => setRefreshKey(k => k + 1);
+  const bumpTopology = useCallback(() => setRefreshKey(k => k + 1), []);
+
+  const {
+    canUndo,
+    canRedo,
+    record: recordHistory,
+    undo,
+    redo,
+  } = useCommandHistory(activeTopologyId, bumpTopology);
 
   const mutations = useTopologyMutations({
     activeTopologyId,
     setActiveTopologyId,
     nodes: activeNodes,
+    edges: activeEdges,
     selectedNodeData: selection.selectedNodeData,
     selectedEdgeData: selection.selectedEdgeData,
     refreshTopologies,
@@ -49,6 +59,7 @@ const App: React.FC = () => {
     clearEdgeSelection: selection.clearEdgeSelection,
     setSelectedNodeData: selection.setSelectedNodeData,
     setSelectedEdgeData: selection.setSelectedEdgeData,
+    recordHistory,
   });
 
   useEffect(() => {
@@ -63,9 +74,49 @@ const App: React.FC = () => {
     }
   }, [topologies, activeTopologyId]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
+
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod || event.altKey) return;
+
+      if (event.key === 'z' || event.key === 'Z') {
+        if (event.shiftKey) {
+          if (!canRedo) return;
+          event.preventDefault();
+          void redo();
+        } else {
+          if (!canUndo) return;
+          event.preventDefault();
+          void undo();
+        }
+        return;
+      }
+
+      if (event.key === 'y' || event.key === 'Y') {
+        if (!canRedo) return;
+        event.preventDefault();
+        void redo();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canUndo, canRedo, undo, redo]);
+
   return (
     <Layout style={{ height: '100vh', background: '#0e1117' }}>
-      <AppHeader />
+      <AppHeader
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={() => void undo()}
+        onRedo={() => void redo()}
+      />
       <Layout style={{ background: '#0e1117' }}>
         <TopologySidebar
           topologies={topologies}

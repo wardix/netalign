@@ -1,11 +1,27 @@
 import React from 'react';
-import { Layout, Select } from 'antd';
+import { Button, Layout, Select, Space, Tooltip } from 'antd';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
 const { Header } = Layout;
 
-export const AppHeader: React.FC = () => {
+interface AppHeaderProps {
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
+}
+
+export const AppHeader: React.FC<AppHeaderProps> = ({
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+}) => {
   const { t, locale, setLocale } = useI18n();
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  const undoShortcut = isMac ? '⌘Z' : 'Ctrl+Z';
+  const redoShortcut = isMac ? '⌘⇧Z' : 'Ctrl+Shift+Z';
 
   return (
     <Header
@@ -22,6 +38,18 @@ export const AppHeader: React.FC = () => {
       }}
     >
       <span>{t('app.title')}</span>
+      <Space size={8} style={{ marginLeft: 8 }}>
+        <Tooltip title={`${t('history.undo')} (${undoShortcut})`}>
+          <Button size="small" disabled={!canUndo || !onUndo} onClick={onUndo}>
+            {t('history.undo')}
+          </Button>
+        </Tooltip>
+        <Tooltip title={`${t('history.redo')} (${redoShortcut})`}>
+          <Button size="small" disabled={!canRedo || !onRedo} onClick={onRedo}>
+            {t('history.redo')}
+          </Button>
+        </Tooltip>
+      </Space>
       <Select
         size="small"
         value={locale}
