@@ -32,6 +32,7 @@ const App: React.FC = () => {
   const [topoForm] = Form.useForm();
   const [nodeForm] = Form.useForm();
   const [edgeForm] = Form.useForm();
+  const [nodeDetailForm] = Form.useForm();
 
   // Load topologies list
   const loadTopologies = (selectId?: string) => {
@@ -74,6 +75,14 @@ const App: React.FC = () => {
   useEffect(() => {
     edgeForm.resetFields();
   }, [activeTopologyId, edgeForm]);
+
+  useEffect(() => {
+    if (!selectedNodeData) {
+      nodeDetailForm.resetFields();
+      return;
+    }
+    nodeDetailForm.setFieldsValue({ label: selectedNodeData.label });
+  }, [selectedNodeData, nodeDetailForm]);
 
   const edgeSource = Form.useWatch('source', edgeForm);
 
@@ -205,6 +214,33 @@ const App: React.FC = () => {
       .catch(err => {
         console.error(err);
         message.error(err.message || 'Failed to add node');
+      });
+  };
+
+  const updateNodeLabel = (values: { label: string }) => {
+    if (!activeTopologyId || !selectedNodeData) return;
+
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${selectedNodeData.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: values.label }),
+    })
+      .then(res => {
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Update node failed'); });
+        return res.json();
+      })
+      .then(updatedNode => {
+        message.success('Node label updated');
+        setSelectedNodeData({
+          id: updatedNode.id,
+          label: updatedNode.data?.label || updatedNode.id,
+          type: updatedNode.type,
+        });
+        setRefreshKey(k => k + 1);
+      })
+      .catch(err => {
+        console.error(err);
+        message.error(err.message || 'Failed to update node');
       });
   };
 
@@ -483,15 +519,35 @@ const App: React.FC = () => {
             title="Node Details"
             open={nodeModalVisible}
             onCancel={() => setNodeModalVisible(false)}
-            footer={<Button onClick={() => setNodeModalVisible(false)}>Close</Button>}
+            footer={[
+              <Button key="close" onClick={() => setNodeModalVisible(false)}>
+                Close
+              </Button>,
+              <Button
+                key="save"
+                type="primary"
+                onClick={() => nodeDetailForm.submit()}
+                disabled={!selectedNodeData}
+              >
+                Save
+              </Button>,
+            ]}
           >
             {selectedNodeData ? (
-              <Descriptions column={1} bordered size="small">
-                <Descriptions.Item label="ID">{selectedNodeData.id}</Descriptions.Item>
-                <Descriptions.Item label="Label">{selectedNodeData.label}</Descriptions.Item>
-                <Descriptions.Item label="Type">{selectedNodeData.type}</Descriptions.Item>
-              </Descriptions>
-            ) : <p>Loading...</p>}
+              <Form form={nodeDetailForm} layout="vertical" onFinish={updateNodeLabel}>
+                <Form.Item label="ID">
+                  <Input value={selectedNodeData.id} disabled />
+                </Form.Item>
+                <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label is required' }]}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="Type">
+                  <Input value={selectedNodeData.type} disabled />
+                </Form.Item>
+              </Form>
+            ) : (
+              <p>Loading...</p>
+            )}
           </Modal>
 
           <Modal

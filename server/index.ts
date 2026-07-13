@@ -189,7 +189,47 @@ app.post('/api/topologies/:id/nodes', async (c) => {
   }
 });
 
-// 6. Delete a node from a topology (and all connected edges)
+// 6. Update a node in a topology
+app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
+  const id = c.req.param('id');
+  const nodeId = c.req.param('nodeId');
+  const invalidNode = invalidIdResponse(c, nodeId);
+  if (invalidNode) return invalidNode;
+
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
+
+  if (!(await Bun.file(filePath).exists())) {
+    return c.json({ error: 'Topology not found' }, 404);
+  }
+
+  try {
+    const body = await c.req.json();
+    const label = typeof body.label === 'string' ? body.label.trim() : '';
+
+    if (!label) {
+      return c.json({ error: 'Label is required' }, 400);
+    }
+
+    const data = await Bun.file(filePath).json();
+    const node = data.nodes.find((n: { id: string }) => n.id === nodeId);
+
+    if (!node) {
+      return c.json({ error: 'Node not found' }, 404);
+    }
+
+    node.data = { ...node.data, label };
+
+    await Bun.write(filePath, JSON.stringify(data, null, 2));
+    return c.json(node);
+  } catch (error) {
+    console.error('Error updating node:', error);
+    return c.json({ error: 'Failed to update node' }, 500);
+  }
+});
+
+// 7. Delete a node from a topology (and all connected edges)
 app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   const id = c.req.param('id');
   const nodeId = c.req.param('nodeId');
@@ -225,7 +265,7 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
   }
 });
 
-// 7. Add an edge to a topology
+// 8. Add an edge to a topology
 app.post('/api/topologies/:id/edges', async (c) => {
   const id = c.req.param('id');
   const pathResult = topologyPathOrResponse(c, id);
@@ -285,7 +325,7 @@ app.post('/api/topologies/:id/edges', async (c) => {
   }
 });
 
-// 8. Delete an edge from a topology
+// 9. Delete an edge from a topology
 app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   const id = c.req.param('id');
   const edgeId = c.req.param('edgeId');
