@@ -17,6 +17,10 @@ bun-debug.log*
 .DS_Store
 Thumbs.db
 
+# SQLite database
+server/data/*.db
+server/data/*.db-*
+
 # Test artifacts
 test-results/
 playwright-report/
