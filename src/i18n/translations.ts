@@ -111,6 +111,21 @@ export const translations = {
     'canvas.crashTitle': 'Kanvas topologi error',
     'canvas.crashDetail':
       'Terjadi kesalahan saat merender grafik. Coba lagi atau pilih topologi lain.',
+    'wizard.title': 'Mulai topologi baru',
+    'wizard.subtitle': 'Ikuti tiga langkah singkat, atau isi contoh dalam satu klik.',
+    'wizard.step1Title': 'Tambah subnet',
+    'wizard.step1Body': 'Gunakan panel “Tambah Node” di sidebar, pilih tipe Subnet.',
+    'wizard.step2Title': 'Tambah router atau instans',
+    'wizard.step2Body': 'Tambahkan router dan/atau VM (instans) yang akan terhubung ke subnet.',
+    'wizard.step3Title': 'Hubungkan edge',
+    'wizard.step3Body': 'Di “Tambah Edge”, hubungkan router/instans ke subnet (bukan ke sesama).',
+    'wizard.rules':
+      'Aturan: router dan instans hanya boleh terhubung langsung ke subnet.',
+    'wizard.scaffold': 'Buat contoh (subnet + router + instans)',
+    'wizard.orSidebar': 'Atau ikuti langkah di sidebar kiri.',
+    'wizard.scaffoldDone': 'Contoh topologi berhasil dibuat',
+    'wizard.scaffoldFailed': 'Gagal membuat contoh topologi',
+    'wizard.notEmpty': 'Topologi ini sudah berisi node',
     'error.edge.invalidConnection':
       'Koneksi tidak valid: router dan instans hanya dapat terhubung langsung ke subnet.',
     'error.edge.duplicate': 'Edge antara node ini sudah ada',
@@ -223,6 +238,21 @@ export const translations = {
     'canvas.crashTitle': 'Topology canvas error',
     'canvas.crashDetail':
       'Something went wrong while rendering the graph. Try again or switch topologies.',
+    'wizard.title': 'Start a new topology',
+    'wizard.subtitle': 'Follow three short steps, or fill a sample graph in one click.',
+    'wizard.step1Title': 'Add a subnet',
+    'wizard.step1Body': 'Use Add Node in the sidebar and choose type Subnet.',
+    'wizard.step2Title': 'Add a router or instance',
+    'wizard.step2Body': 'Add routers and/or VMs (instances) that will connect to a subnet.',
+    'wizard.step3Title': 'Connect edges',
+    'wizard.step3Body': 'In Add Edge, link routers/instances to a subnet (not to each other).',
+    'wizard.rules':
+      'Rule: routers and instances may only connect directly to subnets.',
+    'wizard.scaffold': 'Create sample (subnet + router + instance)',
+    'wizard.orSidebar': 'Or follow the steps in the left sidebar.',
+    'wizard.scaffoldDone': 'Sample topology created',
+    'wizard.scaffoldFailed': 'Failed to create sample topology',
+    'wizard.notEmpty': 'This topology already has nodes',
     'error.edge.invalidConnection':
       'Invalid connection: routers and instances can only connect directly to subnets.',
     'error.edge.duplicate': 'Edge already exists between these nodes',

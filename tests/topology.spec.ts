@@ -197,4 +197,40 @@ test.describe('NetAlign dashboard', () => {
     const response = await positionsPromise;
     expect(response.status()).toBe(200);
   });
+
+  test('empty topology shows guided wizard and sample scaffold', async ({ page }) => {
+    await page.getByRole('button', { name: 'Baru' }).click();
+    const nameInput = page.locator('.ant-modal-confirm .ant-form-item').filter({
+      has: page.locator('label', { hasText: 'Nama' }),
+    }).getByRole('textbox');
+    await nameInput.fill(`Empty E2E ${Date.now()}`);
+
+    const createPromise = page.waitForResponse(
+      response =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/topologies',
+    );
+    await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Buat' }).click();
+    expect((await createPromise).status()).toBe(201);
+
+    await expect(page.getByTestId('empty-topology-guide')).toBeVisible();
+    await expect(page.getByText('Mulai topologi baru')).toBeVisible();
+
+    const nodePosts: Promise<Response>[] = [];
+    for (let i = 0; i < 3; i++) {
+      nodePosts.push(
+        page.waitForResponse(
+          response =>
+            response.request().method() === 'POST' &&
+            /\/api\/topologies\/[^/]+\/nodes$/.test(new URL(response.url()).pathname),
+        ),
+      );
+    }
+    await page.getByRole('button', { name: /Buat contoh/ }).click();
+    for (const p of nodePosts) {
+      expect((await p).status()).toBe(201);
+    }
+
+    await expect(page.getByTestId('empty-topology-guide')).toHaveCount(0);
+  });
 });

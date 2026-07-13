@@ -16,6 +16,7 @@ import {
   computeLayout,
   layoutResultToPositionUpdates,
 } from '../../shared/layoutEngine.ts';
+import { buildSampleScaffold } from '../../shared/sampleScaffold.ts';
 import type { TopologyEdge, TopologyNode, TopologyNodeTypeValue, TopologySummary } from '../../shared/types.ts';
 import type { HistoryCommand } from '../history/historyStack.ts';
 import type { SelectedNodeData } from './useSelection.ts';
@@ -76,6 +77,8 @@ export interface UseTopologyMutationsResult {
   importTopology: (file: File) => Promise<boolean>;
   /** Re-run auto-layout, persist new positions, record history. */
   resetLayout: () => Promise<boolean>;
+  /** Create a small valid demo graph on an empty topology. */
+  scaffoldSample: () => Promise<boolean>;
 }
 
 export function useTopologyMutations(options: UseTopologyMutationsOptions): UseTopologyMutationsResult {
@@ -606,6 +609,58 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     t,
   ]);
 
+  const scaffoldSample = useCallback(async () => {
+    if (!activeTopologyId) {
+      message.warning(t('common.selectTopologyFirst'));
+      return false;
+    }
+    if (nodes.length > 0) {
+      message.warning(t('wizard.notEmpty'));
+      return false;
+    }
+
+    const plan = buildSampleScaffold();
+    try {
+      for (const body of plan.nodes) {
+        const created = await topologyApi.addNode(activeTopologyId, body);
+        cache.upsertNode(created);
+        recordHistory({
+          type: 'addNode',
+          topologyId: activeTopologyId,
+          node: {
+            id: created.id,
+            type: created.type,
+            label: created.data?.label || body.label || created.id,
+            position: created.position,
+          },
+        });
+      }
+      for (const body of plan.edges) {
+        const created = await topologyApi.addEdge(activeTopologyId, body);
+        cache.upsertEdge(created);
+        recordHistory({
+          type: 'addEdge',
+          topologyId: activeTopologyId,
+          edge: created,
+        });
+      }
+      message.success(t('wizard.scaffoldDone'));
+      return true;
+    } catch (err) {
+      showApiError(err, 'wizard.scaffoldFailed');
+      await silentRefresh();
+      return false;
+    }
+  }, [
+    activeTopologyId,
+    cache,
+    nodes.length,
+    recordHistory,
+    showApiError,
+    silentRefresh,
+    t,
+  ]);
+
   return {
     createTopology,
     renameTopology,
@@ -622,5 +677,6 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     exportTopology,
     importTopology,
     resetLayout,
+    scaffoldSample,
   };
 }

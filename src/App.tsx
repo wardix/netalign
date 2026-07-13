@@ -196,6 +196,7 @@ const App: React.FC = () => {
                 onEdgeSelect={selection.selectEdge}
                 onNodePositionsChange={mutations.saveNodePositions}
                 onResetLayout={() => void mutations.resetLayout()}
+                onScaffoldSample={() => void mutations.scaffoldSample()}
               />
             </Suspense>
           </GraphErrorBoundary>
