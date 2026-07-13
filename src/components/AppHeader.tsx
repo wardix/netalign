@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Layout, Select, Space, Tooltip } from 'antd';
+import { Button, Layout, Select, Space, Tag, Tooltip } from 'antd';
+import type { CollabConnectionStatus } from '../hooks/useTopologyCollab.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
 const { Header } = Layout;
@@ -13,6 +14,8 @@ interface AppHeaderProps {
   showPanelToggle?: boolean;
   panelOpen?: boolean;
   onTogglePanel?: () => void;
+  collabStatus?: CollabConnectionStatus;
+  collabPeerCount?: number;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -23,6 +26,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   showPanelToggle = false,
   panelOpen = true,
   onTogglePanel,
+  collabStatus = 'idle',
+  collabPeerCount = 0,
 }) => {
   const { t, locale, setLocale } = useI18n();
   const isMac =
@@ -63,6 +68,35 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </Tooltip>
       )}
       <span style={{ whiteSpace: 'nowrap' }}>{t('app.title')}</span>
+      {collabStatus !== 'idle' && (
+        <Tooltip
+          title={
+            collabStatus === 'connected'
+              ? t('collab.connectedHint')
+              : collabStatus === 'reconnecting'
+                ? t('collab.reconnectingHint')
+                : t('collab.connectingHint')
+          }
+        >
+          <Tag
+            color={
+              collabStatus === 'connected'
+                ? 'success'
+                : collabStatus === 'reconnecting'
+                  ? 'warning'
+                  : 'processing'
+            }
+            style={{ marginInlineEnd: 0 }}
+            aria-live="polite"
+          >
+            {collabStatus === 'connected'
+              ? t('collab.peers', { count: String(Math.max(collabPeerCount, 1)) })
+              : collabStatus === 'reconnecting'
+                ? t('collab.reconnecting')
+                : t('collab.connecting')}
+          </Tag>
+        </Tooltip>
+      )}
       <Space size={8} style={{ marginLeft: 4 }} wrap role="group" aria-label={t('a11y.historyGroup')}>
         <Tooltip title={`${t('history.undo')} (${undoShortcut})`}>
           <Button
