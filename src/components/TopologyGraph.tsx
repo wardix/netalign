@@ -22,7 +22,10 @@ interface TopologyGraphProps {
   onRetry?: () => void;
   onNodeSelect?: (nodeId: string) => void;
   onEdgeSelect?: (edgeId: string) => void;
-  onNodePositionsChange?: (updates: NodePositionUpdate[]) => void;
+  onNodePositionsChange?: (
+    updates: NodePositionUpdate[],
+    previous: NodePositionUpdate[],
+  ) => void;
 }
 
 const canvasOverlayStyle: React.CSSProperties = {
@@ -144,8 +147,12 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
         nodeId: id,
         position: cy.getElementById(id).position(),
       }));
+      const previous = [...movedIds].map(id => ({
+        nodeId: id,
+        position: { ...state.startPositions[id]! },
+      }));
 
-      onNodePositionsChange(updates);
+      onNodePositionsChange(updates, previous);
     };
 
     cy.nodes().grabify();
