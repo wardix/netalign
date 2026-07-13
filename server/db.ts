@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { LEGACY_OWNER_ID } from '../shared/authConfig.ts';
 import { isTopology, type Topology } from '../shared/types.ts';
 
 const DATA_DIR = resolve(import.meta.dir, 'data');
@@ -37,13 +38,56 @@ export function resetDatabase(dbPath: string, options?: { migrateFromJson?: bool
   return getDatabase();
 }
 
+function tableHasColumn(db: Database, table: string, column: string): boolean {
+  const cols = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return cols.some(c => c.name === column);
+}
+
 function initializeSchema(db: Database): void {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   db.run(`
     CREATE TABLE IF NOT EXISTS topologies (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL
+      name TEXT NOT NULL,
+      owner_id TEXT
     )
   `);
+
+  // Existing DBs created before ownership: add owner_id if missing.
+  if (!tableHasColumn(db, 'topologies', 'owner_id')) {
+    db.run('ALTER TABLE topologies ADD COLUMN owner_id TEXT');
+  }
+
+  // Ensure legacy owner exists, then assign orphan topologies.
+  const legacy = db
+    .query('SELECT id FROM users WHERE id = ?')
+    .get(LEGACY_OWNER_ID) as { id: string } | null;
+  if (!legacy) {
+    db.run(
+      `INSERT INTO users (id, username, password_hash, created_at)
+       VALUES (?, ?, ?, ?)`,
+      [LEGACY_OWNER_ID, '__legacy__', '!', new Date().toISOString()],
+    );
+  }
+  db.run('UPDATE topologies SET owner_id = ? WHERE owner_id IS NULL', [LEGACY_OWNER_ID]);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS nodes (
@@ -85,8 +129,12 @@ function readJsonTopologies(): Topology[] {
   return topologies;
 }
 
-function insertTopology(db: Database, topology: Topology): void {
-  db.run('INSERT INTO topologies (id, name) VALUES (?, ?)', [topology.id, topology.name]);
+function insertTopology(db: Database, topology: Topology, ownerId: string = LEGACY_OWNER_ID): void {
+  db.run('INSERT INTO topologies (id, name, owner_id) VALUES (?, ?, ?)', [
+    topology.id,
+    topology.name,
+    ownerId,
+  ]);
 
   const insertNode = db.prepare(`
     INSERT INTO nodes (topology_id, id, type, label, position_x, position_y)

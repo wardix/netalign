@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Layout, Select, Space, Tag, Tooltip } from 'antd';
+import { Button, Layout, Select, Space, Tag, Tooltip, Typography } from 'antd';
+import { useAuth } from '../auth/AuthProvider.tsx';
 import type { CollabConnectionStatus } from '../hooks/useTopologyCollab.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
@@ -30,6 +31,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   collabPeerCount = 0,
 }) => {
   const { t, locale, setLocale } = useI18n();
+  const { authEnabled, user, logout } = useAuth();
   const isMac =
     typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
   const undoShortcut = isMac ? '⌘Z' : 'Ctrl+Z';
@@ -121,17 +123,29 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </Button>
         </Tooltip>
       </Space>
-      <Select
-        size="small"
-        value={locale}
-        onChange={setLocale}
-        style={{ width: 72, marginLeft: 'auto' }}
-        aria-label={t('a11y.localeSelect')}
-        options={[
-          { value: 'id', label: t('locale.id') },
-          { value: 'en', label: t('locale.en') },
-        ]}
-      />
+      <Space size={8} style={{ marginLeft: 'auto' }} wrap>
+        {authEnabled && user && (
+          <>
+            <Typography.Text style={{ color: '#d1d5db', fontSize: 13 }}>
+              {user.username}
+            </Typography.Text>
+            <Button size="small" onClick={() => void logout()} aria-label={t('auth.logout')}>
+              {t('auth.logout')}
+            </Button>
+          </>
+        )}
+        <Select
+          size="small"
+          value={locale}
+          onChange={setLocale}
+          style={{ width: 72 }}
+          aria-label={t('a11y.localeSelect')}
+          options={[
+            { value: 'id', label: t('locale.id') },
+            { value: 'en', label: t('locale.en') },
+          ]}
+        />
+      </Space>
     </Header>
   );
 };

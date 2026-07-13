@@ -232,6 +232,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 | `PORT` | `5000` | Hono backend listen port |
 | `NODE_ENV` | `development` | Environment mode |
 | `NETALIGN_DB_PATH` | `server/data/netalign.db` | SQLite database file path |
+| `NETALIGN_AUTH_MODE` | `off` (dev) / `on` (production) | Require login and scope topologies by owner. See [`docs/auth.md`](docs/auth.md). |
 | `CORS_ORIGINS` | (dev local origins) | Comma-separated allowed browser origins; empty in production denies cross-origin |
 | `PROTECTED_TOPOLOGY_IDS` | `topology-1` | Topology ids that cannot be deleted (seed safety) |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` (JSON logs to stdout/stderr) |
@@ -284,6 +285,17 @@ Machine-readable contract (aligned with `shared/types.ts` and `shared/apiErrors.
 | `GET` | `/api/docs` | Swagger UI (non-production by default; set `NETALIGN_OPENAPI_UI=1` to force on) |
 
 Validate the spec locally: `bun run openapi:check` (also covered by unit tests).
+
+### Authentication
+
+Local **username/password sessions** with per-user topology ownership.
+
+| Item | Detail |
+|------|--------|
+| Default | Auth **on** in production, **off** for local/dev/tests |
+| Override | `NETALIGN_AUTH_MODE=on` or `off` |
+| Cookie | `netalign_session` (HttpOnly); also `Authorization: Bearer` |
+| Docs | [`docs/auth.md`](docs/auth.md) |
 
 ### Real-time collaboration (WebSocket)
 

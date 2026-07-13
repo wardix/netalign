@@ -37,6 +37,14 @@ export const API_ERROR_CODES = [
   'EDGE_DELETE_FAILED',
   'IMPORT_INVALID',
   'IMPORT_FAILED',
+  'AUTH_REQUIRED',
+  'AUTH_INVALID_CREDENTIALS',
+  'AUTH_USERNAME_TAKEN',
+  'AUTH_USERNAME_INVALID',
+  'AUTH_PASSWORD_INVALID',
+  'AUTH_FORBIDDEN',
+  'AUTH_REGISTER_FAILED',
+  'AUTH_LOGIN_FAILED',
   'INTERNAL_ERROR',
 ] as const;
 
@@ -84,6 +92,15 @@ export const API_ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   EDGE_DELETE_FAILED: 'Failed to delete edge',
   IMPORT_INVALID: 'Import document must be a topology object with name, nodes, and edges',
   IMPORT_FAILED: 'Failed to import topology',
+  AUTH_REQUIRED: 'Authentication required',
+  AUTH_INVALID_CREDENTIALS: 'Invalid username or password',
+  AUTH_USERNAME_TAKEN: 'Username is already taken',
+  AUTH_USERNAME_INVALID:
+    'Username must be 3–32 characters and use only letters, numbers, underscores, or dashes',
+  AUTH_PASSWORD_INVALID: 'Password must be at least 8 characters',
+  AUTH_FORBIDDEN: 'You do not have access to this topology',
+  AUTH_REGISTER_FAILED: 'Failed to register user',
+  AUTH_LOGIN_FAILED: 'Failed to log in',
   INTERNAL_ERROR: 'Internal server error',
 };
 
