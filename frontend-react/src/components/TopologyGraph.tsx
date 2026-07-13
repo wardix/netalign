@@ -211,9 +211,29 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({ activeTopologyId, trigger
           });
         });
 
+        // Base64 SVGs for network icons
+        const routerSvg = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23BD10E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+            <line x1="12" y1="2" x2="12" y2="22"/>
+          </svg>
+        `);
+        const instanceSvg = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="90" height="36" viewBox="0 0 24 24" fill="none" stroke="%23FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/>
+            <line x1="6" y1="18" x2="6.01" y2="18"/>
+          </svg>
+        `);
+
         setElements(cyElements);
         setStyles([
-          { selector: 'node', style: { label: 'data(label)', 'background-color': 'data(color)', shape: 'data(shape)', width: 'data(width)', height: 'data(height)', 'text-valign': 'bottom', 'text-halign': 'center', 'font-size': 10, 'font-weight': 'bold', color: '#cfd8dc', 'text-margin-y': 8, 'text-wrap': 'wrap', 'text-max-width': 120, 'border-width': 2.5, 'border-color': 'rgba(255,255,255,0.1)', 'border-style': 'solid', 'transition-property': 'background-color border-color text-color', 'transition-duration': '0.2s' } },
+          { selector: 'node', style: { label: 'data(label)', 'background-color': 'data(color)', shape: 'data(shape)', width: 'data(width)', height: 'data(height)', 'text-valign': 'bottom', 'text-halign': 'center', 'font-size': 10, 'font-weight': 'bold', color: '#cfd8dc', 'text-margin-y': 8, 'text-wrap': 'wrap', 'text-max-width': 120, 'border-width': 2.5, 'border-color': 'rgba(255,255,255,0.1)', 'border-style': 'solid', 'transition-property': 'background-color border-color text-color', 'transition-duration': '0.2s', 'background-fit': 'contain', 'background-clip': 'node' } },
+          { selector: 'node[type="router"]', style: { 'background-image': routerSvg, 'background-color': '#1a1d24', 'border-color': '#BD10E0' } },
+          { selector: 'node[type="instance"]', style: { 'background-image': instanceSvg, 'background-color': '#1a1d24', 'border-color': '#FF6B6B' } },
+          { selector: 'node[type="subnet"]', style: { 'border-color': 'rgba(255,255,255,0.2)', 'background-opacity': 0.85 } },
           { selector: 'node:selected', style: { 'border-color': '#fff', 'border-width': 3, color: '#ffffff' } },
           { selector: 'edge:selected', style: { width: 4.5, 'line-color': '#fff' } },
           ...edgeStyles
