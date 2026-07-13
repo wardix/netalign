@@ -17,12 +17,21 @@ import type {
   UpdateNodeBody,
 } from '../shared/types.ts';
 import { parseTopologyImport } from '../shared/topologyImport.ts';
+import {
+  getProtectedTopologyIdsFromEnv,
+  isProtectedTopologyId,
+  PROTECTED_TOPOLOGY_DELETE_ERROR,
+} from '../shared/protectedTopologies.ts';
 import { createCorsOriginResolver } from './corsConfig.ts';
 import { validateRouteId } from './paths.ts';
 import * as topologyStore from './topologyStore.ts';
 import type { Context } from 'hono';
 
 const app = new Hono();
+
+const protectedTopologyIds = getProtectedTopologyIdsFromEnv({
+  PROTECTED_TOPOLOGY_IDS: Bun.env.PROTECTED_TOPOLOGY_IDS ?? process.env.PROTECTED_TOPOLOGY_IDS,
+});
 
 const resolveCorsOrigin = createCorsOriginResolver(
   Bun.env.CORS_ORIGINS ?? process.env.CORS_ORIGINS,
@@ -168,6 +177,13 @@ app.post('/api/topologies/import', async (c) => {
   }
 });
 
+function refuseProtectedTopologyDelete(c: Context, topologyId: string) {
+  if (isProtectedTopologyId(topologyId, protectedTopologyIds)) {
+    return c.json({ error: PROTECTED_TOPOLOGY_DELETE_ERROR }, 403);
+  }
+  return null;
+}
+
 // 5. Delete a topology
 app.post('/api/topologies/:id/delete', async (c) => {
   const id = c.req.param('id');
@@ -177,6 +193,9 @@ app.post('/api/topologies/:id/delete', async (c) => {
   if (!topologyStore.topologyExists(idResult.topologyId)) {
     return topologyNotFound(c);
   }
+
+  const protectedResponse = refuseProtectedTopologyDelete(c, idResult.topologyId);
+  if (protectedResponse) return protectedResponse;
 
   try {
     topologyStore.deleteTopology(idResult.topologyId);
@@ -195,6 +214,9 @@ app.delete('/api/topologies/:id', async (c) => {
   if (!topologyStore.topologyExists(idResult.topologyId)) {
     return topologyNotFound(c);
   }
+
+  const protectedResponse = refuseProtectedTopologyDelete(c, idResult.topologyId);
+  if (protectedResponse) return protectedResponse;
 
   try {
     topologyStore.deleteTopology(idResult.topologyId);

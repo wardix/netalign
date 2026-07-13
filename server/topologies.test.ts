@@ -142,6 +142,25 @@ describe('topology CRUD API', () => {
     expect(renameResponse.status).toBe(400);
   });
 
+  test('refuses delete of protected seed topology', async () => {
+    const del = await server.fetch(
+      new Request('http://localhost/api/topologies/topology-1', { method: 'DELETE' }),
+    );
+    expect(del.status).toBe(403);
+    const body = await del.json();
+    expect(body.error).toBe('This topology is protected and cannot be deleted');
+
+    const legacy = await server.fetch(
+      new Request('http://localhost/api/topologies/topology-1/delete', { method: 'POST' }),
+    );
+    expect(legacy.status).toBe(403);
+
+    const stillThere = await server.fetch(
+      new Request('http://localhost/api/topologies/topology-1'),
+    );
+    expect(stillThere.status).toBe(200);
+  });
+
   test('creates and deletes a topology', async () => {
     const createResponse = await server.fetch(
       new Request('http://localhost/api/topologies', {

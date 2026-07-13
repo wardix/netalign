@@ -20,6 +20,7 @@ export const translations = {
     'topologies.cancel': 'Batal',
     'topologies.protectedTitle': 'Dilindungi',
     'topologies.protectedContent': 'Topologi default tidak dapat dihapus.',
+    'topologies.protectedDeleteError': 'Topologi ini dilindungi dan tidak dapat dihapus',
     'topologies.deleteTitle': 'Hapus topologi?',
     'topologies.deleteContent': 'Tindakan ini tidak dapat dibatalkan.',
     'topologies.created': 'Topologi "{name}" berhasil dibuat',
@@ -125,6 +126,7 @@ export const translations = {
     'topologies.cancel': 'Cancel',
     'topologies.protectedTitle': 'Protected',
     'topologies.protectedContent': 'Default topology cannot be deleted.',
+    'topologies.protectedDeleteError': 'This topology is protected and cannot be deleted',
     'topologies.deleteTitle': 'Delete topology?',
     'topologies.deleteContent': 'This action cannot be undone.',
     'topologies.created': 'Topology "{name}" created',
@@ -234,6 +236,7 @@ const API_ERROR_MAP: Record<string, TranslationKey> = {
   'Gateway label must be 64 characters or fewer': 'error.gateway.tooLong',
   'Gateway contains invalid characters': 'error.gateway.invalidChars',
   'Failed to update edge': 'edges.updateFailed',
+  'This topology is protected and cannot be deleted': 'topologies.protectedDeleteError',
   'Import document must be a topology object with name, nodes, and edges':
     'topologies.importFailed',
   'Topology name is required': 'topologies.importFailed',

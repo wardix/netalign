@@ -171,6 +171,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 | `NODE_ENV` | `development` | Environment mode |
 | `NETALIGN_DB_PATH` | `server/data/netalign.db` | SQLite database file path |
 | `CORS_ORIGINS` | (dev local origins) | Comma-separated allowed browser origins; empty in production denies cross-origin |
+| `PROTECTED_TOPOLOGY_IDS` | `topology-1` | Topology ids that cannot be deleted (seed safety) |
 | `VITE_API_BASE` | (unset → proxy/same-origin) | Frontend API origin at **build** time |
 
 ---
