@@ -1,7 +1,9 @@
 import type { NodePosition } from '../../shared/nodePosition.ts';
 import type {
+  BatchNodePositionsBody,
   CreateEdgeBody,
   CreateNodeBody,
+  NodePositionUpdateItem,
   Topology,
   TopologyEdge,
   TopologyNode,
@@ -56,6 +58,17 @@ export const topologyApi = {
     position: NodePosition,
   ): Promise<TopologyNode> {
     return apiPut<TopologyNode>(`/api/topologies/${topologyId}/nodes/${nodeId}`, { position });
+  },
+
+  updateNodePositions(
+    topologyId: string,
+    updates: NodePositionUpdateItem[],
+  ): Promise<{ nodes: TopologyNode[] }> {
+    const body: BatchNodePositionsBody = { updates };
+    return apiPut<{ nodes: TopologyNode[] }>(
+      `/api/topologies/${topologyId}/nodes/positions`,
+      body,
+    );
   },
 
   deleteNode(topologyId: string, nodeId: string): Promise<DeleteSuccessResponse> {

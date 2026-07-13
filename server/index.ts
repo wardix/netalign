@@ -6,6 +6,7 @@ import { getGatewayValidationError, normalizeGateway } from '../shared/edgeGatew
 import { getPositionValidationError, parseNodePosition } from '../shared/nodePosition.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import type {
+  BatchNodePositionsBody,
   CreateEdgeBody,
   CreateNodeBody,
   Topology,
@@ -226,6 +227,50 @@ app.post('/api/topologies/:id/nodes', async (c) => {
   } catch (error) {
     console.error('Error adding node:', error);
     return c.json({ error: 'Failed to add node' }, 500);
+  }
+});
+
+// 7a. Batch-update node positions (single transaction)
+app.put('/api/topologies/:id/nodes/positions', async (c) => {
+  const id = c.req.param('id');
+  const idResult = topologyIdOrResponse(c, id);
+  if ('response' in idResult) return idResult.response;
+
+  if (!topologyStore.topologyExists(idResult.topologyId)) {
+    return topologyNotFound(c);
+  }
+
+  try {
+    const body = (await c.req.json()) as BatchNodePositionsBody;
+    if (!body || !Array.isArray(body.updates)) {
+      return c.json({ error: 'Body must include an updates array' }, 400);
+    }
+
+    const parsed: { nodeId: string; position: { x: number; y: number } }[] = [];
+    for (const item of body.updates) {
+      if (!item || typeof item !== 'object') {
+        return c.json({ error: 'Each update must be an object with nodeId and position' }, 400);
+      }
+      const nodeId = typeof item.nodeId === 'string' ? item.nodeId : '';
+      const invalidNode = invalidIdResponse(c, nodeId);
+      if (invalidNode) return invalidNode;
+
+      const positionError = getPositionValidationError(item.position);
+      if (positionError) {
+        return c.json({ error: positionError }, 400);
+      }
+      parsed.push({ nodeId, position: parseNodePosition(item.position)! });
+    }
+
+    const result = topologyStore.updateNodePositions(idResult.topologyId, parsed);
+    if (!result.ok) {
+      const status = result.error.startsWith('Node not found') ? 404 : 400;
+      return c.json({ error: result.error }, status);
+    }
+    return c.json({ nodes: result.nodes });
+  } catch (error) {
+    console.error('Error batch-updating node positions:', error);
+    return c.json({ error: 'Failed to update node positions' }, 500);
   }
 });
 

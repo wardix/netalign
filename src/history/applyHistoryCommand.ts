@@ -54,11 +54,7 @@ export async function applyUndoCommand(command: HistoryCommand): Promise<void> {
       });
       return;
     case 'moveNodes':
-      await Promise.all(
-        command.previous.map(({ nodeId, position }) =>
-          topologyApi.updateNodePosition(command.topologyId, nodeId, position),
-        ),
-      );
+      await topologyApi.updateNodePositions(command.topologyId, command.previous);
       return;
   }
 }
@@ -107,11 +103,7 @@ export async function applyRedoCommand(command: HistoryCommand): Promise<void> {
       });
       return;
     case 'moveNodes':
-      await Promise.all(
-        command.next.map(({ nodeId, position }) =>
-          topologyApi.updateNodePosition(command.topologyId, nodeId, position),
-        ),
-      );
+      await topologyApi.updateNodePositions(command.topologyId, command.next);
       return;
   }
 }

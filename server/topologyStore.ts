@@ -180,6 +180,59 @@ export function updateNodePosition(
   })();
 }
 
+export type BatchPositionResult =
+  | { ok: true; nodes: TopologyNode[] }
+  | { ok: false; error: string };
+
+/**
+ * Apply multiple node position updates in a single transaction.
+ * Validates all node ids exist before writing; on any failure nothing is committed.
+ */
+export function updateNodePositions(
+  topologyId: string,
+  updates: { nodeId: string; position: NodePosition }[],
+): BatchPositionResult {
+  if (updates.length === 0) {
+    return { ok: false, error: 'At least one position update is required' };
+  }
+
+  const seen = new Set<string>();
+  for (const update of updates) {
+    if (!update.nodeId || seen.has(update.nodeId)) {
+      return { ok: false, error: 'Duplicate or empty nodeId in position updates' };
+    }
+    seen.add(update.nodeId);
+    if (!nodeExists(topologyId, update.nodeId)) {
+      return { ok: false, error: `Node not found: ${update.nodeId}` };
+    }
+  }
+
+  const db = getDatabase();
+  try {
+    const nodes = db.transaction(() => {
+      const updated: TopologyNode[] = [];
+      for (const { nodeId, position } of updates) {
+        const result = db
+          .query(
+            `UPDATE nodes SET position_x = ?, position_y = ?
+             WHERE topology_id = ? AND id = ?
+             RETURNING id, type, label, position_x, position_y`,
+          )
+          .get(position.x, position.y, topologyId, nodeId) as NodeRow | null;
+        if (!result) {
+          throw new Error(`Node not found: ${nodeId}`);
+        }
+        updated.push(rowToNode(result));
+      }
+      return updated;
+    })();
+    return { ok: true, nodes };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update positions';
+    return { ok: false, error: message };
+  }
+}
+
 export function deleteNode(topologyId: string, nodeId: string): boolean {
   const db = getDatabase();
   return db.transaction(() => {

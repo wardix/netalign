@@ -40,6 +40,15 @@ export interface UpdateNodeBody {
   position?: NodePosition;
 }
 
+export interface NodePositionUpdateItem {
+  nodeId: string;
+  position: NodePosition;
+}
+
+export interface BatchNodePositionsBody {
+  updates: NodePositionUpdateItem[];
+}
+
 export interface CreateNodeBody {
   nodeId: string;
   type: TopologyNodeTypeValue;

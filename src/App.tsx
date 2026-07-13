@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { Layout, message, Spin } from 'antd';
 import { useTopologies } from './hooks/useTopologies.ts';
 import { useTopology } from './hooks/useTopology.ts';
@@ -27,16 +27,27 @@ const App: React.FC = () => {
     t('topologies.loadFailed'),
   );
   const [activeTopologyId, setActiveTopologyId] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const topology = useTopology(activeTopologyId, t('canvas.loadFailedDetail'));
   const {
     nodes: activeNodes,
     edges: activeEdges,
     loading: topologyLoading,
     error: topologyError,
-  } = useTopology(activeTopologyId, refreshKey, t('canvas.loadFailedDetail'));
+    refresh: refreshTopology,
+    upsertNode,
+    removeNode,
+    upsertEdge,
+    removeEdge,
+    patchNode,
+    patchNodePositions,
+  } = topology;
 
   const selection = useSelection(activeTopologyId, activeNodes, activeEdges);
-  const bumpTopology = useCallback(() => setRefreshKey(k => k + 1), []);
+
+  const silentRefresh = useCallback(
+    () => refreshTopology({ silent: true }),
+    [refreshTopology],
+  );
 
   const {
     canUndo,
@@ -44,7 +55,19 @@ const App: React.FC = () => {
     record: recordHistory,
     undo,
     redo,
-  } = useCommandHistory(activeTopologyId, bumpTopology);
+  } = useCommandHistory(activeTopologyId, silentRefresh);
+
+  const cache = useMemo(
+    () => ({
+      upsertNode,
+      removeNode,
+      upsertEdge,
+      removeEdge,
+      patchNode,
+      patchNodePositions,
+    }),
+    [upsertNode, removeNode, upsertEdge, removeEdge, patchNode, patchNodePositions],
+  );
 
   const mutations = useTopologyMutations({
     activeTopologyId,
@@ -54,7 +77,8 @@ const App: React.FC = () => {
     selectedNodeData: selection.selectedNodeData,
     selectedEdgeData: selection.selectedEdgeData,
     refreshTopologies,
-    bumpTopology,
+    silentRefresh,
+    cache,
     clearNodeSelection: selection.clearNodeSelection,
     clearEdgeSelection: selection.clearEdgeSelection,
     setSelectedNodeData: selection.setSelectedNodeData,
@@ -161,7 +185,7 @@ const App: React.FC = () => {
               loading={topologyLoading}
               error={topologyError}
               hasTopology={!!activeTopologyId}
-              onRetry={bumpTopology}
+              onRetry={() => void refreshTopology()}
               onNodeSelect={selection.selectNode}
               onEdgeSelect={selection.selectEdge}
               onNodePositionsChange={mutations.saveNodePositions}

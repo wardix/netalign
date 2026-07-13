@@ -350,4 +350,112 @@ describe('node CRUD API', () => {
     );
     expect(updateResponse.status).toBe(400);
   });
+
+  test('batch-updates multiple node positions in one request', async () => {
+    const createResponse = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Batch Position Topology' }),
+      }),
+    );
+    const topology = await createResponse.json();
+    createdTopologyIds.push(topology.id);
+
+    for (const nodeId of ['subnet-batch', 'router-batch']) {
+      await server.fetch(
+        new Request(`http://localhost/api/topologies/${topology.id}/nodes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nodeId,
+            type: nodeId.startsWith('subnet') ? 'subnet' : 'router',
+            label: nodeId,
+          }),
+        }),
+      );
+    }
+
+    const batchResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes/positions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: [
+            { nodeId: 'subnet-batch', position: { x: 100, y: 200 } },
+            { nodeId: 'router-batch', position: { x: 300, y: 200 } },
+          ],
+        }),
+      }),
+    );
+    expect(batchResponse.status).toBe(200);
+    const batchBody = await batchResponse.json();
+    expect(batchBody.nodes).toHaveLength(2);
+
+    const readResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}`),
+    );
+    const body = await readResponse.json();
+    expect(body.nodes.find((n: { id: string }) => n.id === 'subnet-batch').position).toEqual({
+      x: 100,
+      y: 200,
+    });
+    expect(body.nodes.find((n: { id: string }) => n.id === 'router-batch').position).toEqual({
+      x: 300,
+      y: 200,
+    });
+  });
+
+  test('batch position update rejects missing node without partial write', async () => {
+    const createResponse = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Batch Position Atomic Topology' }),
+      }),
+    );
+    const topology = await createResponse.json();
+    createdTopologyIds.push(topology.id);
+
+    await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodeId: 'subnet-atomic',
+          type: 'subnet',
+          label: 'Subnet',
+        }),
+      }),
+    );
+
+    await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes/subnet-atomic`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: { x: 1, y: 1 } }),
+      }),
+    );
+
+    const batchResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes/positions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: [
+            { nodeId: 'subnet-atomic', position: { x: 99, y: 99 } },
+            { nodeId: 'missing-node', position: { x: 0, y: 0 } },
+          ],
+        }),
+      }),
+    );
+    expect(batchResponse.status).toBe(404);
+
+    const readResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}`),
+    );
+    const body = await readResponse.json();
+    const node = body.nodes.find((n: { id: string }) => n.id === 'subnet-atomic');
+    expect(node.position).toEqual({ x: 1, y: 1 });
+  });
 });

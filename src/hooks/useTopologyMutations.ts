@@ -20,6 +20,15 @@ export interface NodePositionUpdate {
   position: { x: number; y: number };
 }
 
+export interface TopologyLocalCache {
+  upsertNode: (node: TopologyNode) => void;
+  removeNode: (nodeId: string) => void;
+  upsertEdge: (edge: TopologyEdge) => void;
+  removeEdge: (edgeId: string) => void;
+  patchNode: (nodeId: string, patch: Partial<TopologyNode>) => void;
+  patchNodePositions: (updates: NodePositionUpdate[]) => void;
+}
+
 export interface UseTopologyMutationsOptions {
   activeTopologyId: string | null;
   setActiveTopologyId: (id: string | null) => void;
@@ -28,7 +37,9 @@ export interface UseTopologyMutationsOptions {
   selectedNodeData: SelectedNodeData | null;
   selectedEdgeData: TopologyEdge | null;
   refreshTopologies: () => Promise<TopologySummary[]>;
-  bumpTopology: () => void;
+  /** Background reload without canvas spinner (used after undo/redo / error recovery). */
+  silentRefresh: () => Promise<void>;
+  cache: TopologyLocalCache;
   clearNodeSelection: () => void;
   clearEdgeSelection: () => void;
   setSelectedNodeData: (data: SelectedNodeData | null) => void;
@@ -70,7 +81,8 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     selectedNodeData,
     selectedEdgeData,
     refreshTopologies,
-    bumpTopology,
+    silentRefresh,
+    cache,
     clearNodeSelection,
     clearEdgeSelection,
     setSelectedNodeData,
@@ -155,6 +167,7 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
           type: values.nodeType,
           label: values.nodeLabel,
         });
+        cache.upsertNode(created);
         recordHistory({
           type: 'addNode',
           topologyId: activeTopologyId,
@@ -166,26 +179,24 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
           },
         });
         message.success(t('nodes.added'));
-        bumpTopology();
         return true;
       } catch (err) {
         showApiError(err, 'nodes.addFailed');
         return false;
       }
     },
-    [activeTopologyId, bumpTopology, recordHistory, showApiError, t],
+    [activeTopologyId, cache, recordHistory, showApiError, t],
   );
 
   const saveNodePositions = useCallback(
     async (updates: NodePositionUpdate[], previous?: NodePositionUpdate[]) => {
       if (!activeTopologyId || updates.length === 0) return;
 
+      // Optimistic local positions (canvas already shows drag end; keep store in sync).
+      cache.patchNodePositions(updates);
+
       try {
-        await Promise.all(
-          updates.map(({ nodeId, position }) =>
-            topologyApi.updateNodePosition(activeTopologyId, nodeId, position),
-          ),
-        );
+        await topologyApi.updateNodePositions(activeTopologyId, updates);
         if (previous && previous.length > 0) {
           recordHistory({
             type: 'moveNodes',
@@ -195,13 +206,16 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
           });
         }
         message.success(t('nodes.positionSaved'));
-        bumpTopology();
       } catch (err) {
+        if (previous && previous.length > 0) {
+          cache.patchNodePositions(previous);
+        } else {
+          await silentRefresh();
+        }
         showApiError(err, 'nodes.positionSaveFailed');
-        bumpTopology();
       }
     },
-    [activeTopologyId, bumpTopology, recordHistory, showApiError, t],
+    [activeTopologyId, cache, recordHistory, showApiError, silentRefresh, t],
   );
 
   const updateNodeLabel = useCallback(
@@ -210,16 +224,21 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
 
       const previousLabel = selectedNodeData.label;
       const nextLabel = values.label;
+      const nodeId = selectedNodeData.id;
+
+      cache.patchNode(nodeId, { data: { label: nextLabel } });
+      setSelectedNodeData({ ...selectedNodeData, label: nextLabel });
 
       try {
-        const updatedNode = await topologyApi.updateNode(activeTopologyId, selectedNodeData.id, {
+        const updatedNode = await topologyApi.updateNode(activeTopologyId, nodeId, {
           label: nextLabel,
         });
+        cache.upsertNode(updatedNode);
         if (previousLabel !== nextLabel) {
           recordHistory({
             type: 'updateNodeLabel',
             topologyId: activeTopologyId,
-            nodeId: selectedNodeData.id,
+            nodeId,
             previousLabel,
             nextLabel,
           });
@@ -230,12 +249,13 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
           label: updatedNode.data?.label || updatedNode.id,
           type: updatedNode.type,
         });
-        bumpTopology();
       } catch (err) {
+        cache.patchNode(nodeId, { data: { label: previousLabel } });
+        setSelectedNodeData({ ...selectedNodeData, label: previousLabel });
         showApiError(err, 'nodes.updateFailed');
       }
     },
-    [activeTopologyId, bumpTopology, recordHistory, selectedNodeData, setSelectedNodeData, showApiError, t],
+    [activeTopologyId, cache, recordHistory, selectedNodeData, setSelectedNodeData, showApiError, t],
   );
 
   const deleteNode = useCallback(
@@ -249,6 +269,7 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
         onOk: async () => {
           try {
             await topologyApi.deleteNode(activeTopologyId, nodeId);
+            cache.removeNode(nodeId);
             if (node) {
               recordHistory({
                 type: 'deleteNode',
@@ -259,14 +280,24 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
             }
             message.success(t('nodes.deleted'));
             clearNodeSelection();
-            bumpTopology();
           } catch (err) {
             showApiError(err, 'nodes.deleteFailed');
+            await silentRefresh();
           }
         },
       });
     },
-    [activeTopologyId, bumpTopology, clearNodeSelection, edges, nodes, recordHistory, showApiError, t],
+    [
+      activeTopologyId,
+      cache,
+      clearNodeSelection,
+      edges,
+      nodes,
+      recordHistory,
+      showApiError,
+      silentRefresh,
+      t,
+    ],
   );
 
   const validateEdgeForm = useCallback(
@@ -332,13 +363,13 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
 
       try {
         const created = await topologyApi.addEdge(activeTopologyId, payload);
+        cache.upsertEdge(created);
         recordHistory({
           type: 'addEdge',
           topologyId: activeTopologyId,
           edge: created,
         });
         message.success(t('edges.added'));
-        bumpTopology();
         return true;
       } catch (err) {
         showApiError(err, 'edges.addFailed');
@@ -347,7 +378,7 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     },
     [
       activeTopologyId,
-      bumpTopology,
+      cache,
       recordHistory,
       showApiError,
       t,
@@ -368,30 +399,46 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
 
       const previousGateway = selectedEdgeData.gateway || '';
       const nextGateway = values.gateway?.trim() || '';
+      const edgeId = selectedEdgeData.id;
+
+      const optimistic: TopologyEdge = {
+        ...selectedEdgeData,
+        gateway: nextGateway || undefined,
+      };
+      if (!nextGateway) delete optimistic.gateway;
+      cache.upsertEdge(optimistic);
+      setSelectedEdgeData(optimistic);
 
       try {
-        const updatedEdge = await topologyApi.updateEdge(activeTopologyId, selectedEdgeData.id, {
+        const updatedEdge = await topologyApi.updateEdge(activeTopologyId, edgeId, {
           gateway: nextGateway,
         });
+        cache.upsertEdge(updatedEdge);
         if (previousGateway !== nextGateway) {
           recordHistory({
             type: 'updateEdgeGateway',
             topologyId: activeTopologyId,
-            edgeId: selectedEdgeData.id,
+            edgeId,
             previousGateway,
             nextGateway,
           });
         }
         message.success(t('edges.updated'));
         setSelectedEdgeData(updatedEdge);
-        bumpTopology();
       } catch (err) {
+        const rolled: TopologyEdge = {
+          ...selectedEdgeData,
+          gateway: previousGateway || undefined,
+        };
+        if (!previousGateway) delete rolled.gateway;
+        cache.upsertEdge(rolled);
+        setSelectedEdgeData(rolled);
         showApiError(err, 'edges.updateFailed');
       }
     },
     [
       activeTopologyId,
-      bumpTopology,
+      cache,
       recordHistory,
       selectedEdgeData,
       setSelectedEdgeData,
@@ -410,6 +457,7 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
         onOk: async () => {
           try {
             await topologyApi.deleteEdge(activeTopologyId, edgeId);
+            cache.removeEdge(edgeId);
             if (edge && edge.id === edgeId) {
               recordHistory({
                 type: 'deleteEdge',
@@ -419,21 +467,22 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
             }
             message.success(t('edges.deleted'));
             clearEdgeSelection();
-            bumpTopology();
           } catch (err) {
             showApiError(err, 'edges.deleteFailed');
+            await silentRefresh();
           }
         },
       });
     },
     [
       activeTopologyId,
-      bumpTopology,
+      cache,
       clearEdgeSelection,
       edges,
       recordHistory,
       selectedEdgeData,
       showApiError,
+      silentRefresh,
       t,
     ],
   );
