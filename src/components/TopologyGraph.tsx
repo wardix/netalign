@@ -7,6 +7,7 @@ import { computeLayout, getConnectedPeerIds } from '../../shared/layoutEngine.ts
 import type { NodePosition } from '../../shared/nodePosition.ts';
 import type { TopologyNode } from '../../shared/topologyNodes.ts';
 import type { TopologyEdge } from '../../shared/types.ts';
+import { EmptyTopologyGuide } from './EmptyTopologyGuide.tsx';
 
 interface NodePositionUpdate {
   nodeId: string;
@@ -27,6 +28,8 @@ interface TopologyGraphProps {
     previous: NodePositionUpdate[],
   ) => void;
   onResetLayout?: () => void;
+  onScaffoldSample?: () => void | Promise<void>;
+  scaffolding?: boolean;
 }
 
 const canvasOverlayStyle: React.CSSProperties = {
@@ -50,6 +53,8 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onEdgeSelect,
   onNodePositionsChange,
   onResetLayout,
+  onScaffoldSample,
+  scaffolding = false,
 }) => {
   const { t } = useI18n();
   const [elements, setElements] = useState<any[]>([]);
@@ -254,9 +259,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
   if (nodes.length === 0) {
     return (
-      <div style={canvasOverlayStyle}>
-        <Empty description={t('canvas.noNodes')} />
-      </div>
+      <EmptyTopologyGuide onScaffoldSample={onScaffoldSample} scaffolding={scaffolding} />
     );
   }
 
