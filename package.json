@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "bun test shared server",
+    "test": "bun test --preload ./server/testPreload.ts shared server",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
     "test:e2e": "playwright test",
