@@ -93,30 +93,39 @@ bun install
 
 ### Running the Application
 
-Run the backend and frontend in separate terminals:
+**One command** (API + Vite):
 
-1. **Start the Hono backend** (port `5000`):
+```bash
+bun run dev:all
+```
 
-   ```bash
-   bun run server
-   ```
+This starts the Hono backend on port `5000` and the Vite frontend on port `3000`. Open **[http://localhost:3000/](http://localhost:3000/)**.
 
-2. **Start the Vite frontend** (port `3000`):
+Or run them in separate terminals:
 
-   ```bash
-   bun run dev
-   ```
+```bash
+bun run server   # API → http://localhost:5000
+bun run dev      # UI  → http://localhost:3000 (proxies /api → 5000)
+```
 
-Open **[http://localhost:3000/](http://localhost:3000/)** in your browser.
+### Database and seeds
 
-On first startup, the backend creates `server/data/netalign.db` and imports any `*.json` seed files from `server/data/`.
+| Situation | Behavior |
+|-----------|----------|
+| **Empty / missing DB** | Server creates `server/data/netalign.db` (or `NETALIGN_DB_PATH`) and imports every valid `server/data/*.json` topology once. |
+| **Existing DB** | JSON seeds are **not** re-imported (data is already in SQLite). |
+| **Reset local DB** | `bun run db:reset` deletes the DB (+ WAL/SHM), then the next `bun run server` recreates and re-seeds. |
+
+Default seed file: `server/data/topology-1.json` (protected from delete; see `PROTECTED_TOPOLOGY_IDS`).
 
 ### Scripts
 
 | Script | Description |
 |--------|-------------|
+| `bun run dev:all` | API + Vite together (recommended for local work) |
 | `bun run dev` | Vite dev server on port 3000 |
 | `bun run server` | Hono API server on port 5000 |
+| `bun run db:reset` | Delete local SQLite files (re-seed on next server start) |
 | `bun run build` | Type-check and build production bundle to `dist/` |
 | `bun run preview` | Preview the production build locally |
 | `bun run lint` | Run oxlint |
@@ -124,6 +133,25 @@ On first startup, the backend creates `server/data/netalign.db` and imports any 
 | `bun run test:e2e` | Playwright E2E tests (starts both servers) |
 | `bun run test:e2e:headed` | E2E tests with visible browser |
 | `bun run install:playwright` | Install Playwright Chromium |
+
+### Docker (API only)
+
+Build and run the API with a persistent SQLite volume:
+
+```bash
+docker compose up --build
+# Health: http://localhost:5000/api/health
+# Ready:  http://localhost:5000/api/ready
+```
+
+- DB file lives in volume `netalign-data` at `/data/netalign.db`.
+- Seed JSON is baked into the image; import runs only when that DB is empty.
+- For a local UI against Docker API: `bun run dev` (Vite proxy still targets `localhost:5000`), or set `CORS_ORIGINS` / `VITE_API_BASE` for a split host.
+
+```bash
+# Example: allow a custom frontend origin
+CORS_ORIGINS=http://localhost:3000 docker compose up --build
+```
 
 ---
 
