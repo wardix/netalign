@@ -3,12 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions } from 'antd';
 import TopologyGraph from './components/TopologyGraph';
 import { API_BASE } from './api';
+import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 
 const { Header, Sider, Content } = Layout;
 
 interface TopologyInfo {
   id: string;
   name: string;
+}
+
+interface TopologyNode {
+  id: string;
+  type: string;
 }
 
 const App: React.FC = () => {
@@ -21,8 +27,7 @@ const App: React.FC = () => {
   const [selectedEdgeData, setSelectedEdgeData] = useState<any>(null);
   const [nodeModalVisible, setNodeModalVisible] = useState(false);
   const [edgeModalVisible, setEdgeModalVisible] = useState(false);
-
-
+  const [activeNodes, setActiveNodes] = useState<TopologyNode[]>([]);
 
   // Load topologies list
   const loadTopologies = (selectId?: string) => {
@@ -39,15 +44,28 @@ const App: React.FC = () => {
       });
   };
 
-  useEffect(() => {
-    loadTopologies();
-  }, []);
-
   const loadTopologyDetail = (topologyId: string) =>
     fetch(`${API_BASE}/api/topologies/${topologyId}`).then(res => {
       if (!res.ok) throw new Error('Failed to load topology');
       return res.json();
     });
+
+  useEffect(() => {
+    loadTopologies();
+  }, []);
+
+  useEffect(() => {
+    if (!activeTopologyId) {
+      setActiveNodes([]);
+      return;
+    }
+    loadTopologyDetail(activeTopologyId)
+      .then(data => setActiveNodes(data.nodes ?? []))
+      .catch(err => {
+        console.error('Failed to load topology nodes', err);
+        setActiveNodes([]);
+      });
+  }, [activeTopologyId, refreshKey]);
 
   const handleNodeSelect = (nodeId: string) => {
     setSelectedNodeId(nodeId);
@@ -188,10 +206,41 @@ const App: React.FC = () => {
     });
   };
 
+  const validateEdgeForm = (source: string, target: string): string | null => {
+    const trimmedSource = source.trim();
+    const trimmedTarget = target.trim();
+
+    if (!trimmedSource || !trimmedTarget) {
+      return 'Source and target are required';
+    }
+    if (trimmedSource === trimmedTarget) {
+      return 'Source and target must be different nodes';
+    }
+
+    const sourceNode = activeNodes.find(n => n.id === trimmedSource);
+    const targetNode = activeNodes.find(n => n.id === trimmedTarget);
+
+    if (!sourceNode || !targetNode) {
+      return 'Source or target node does not exist in the active topology';
+    }
+
+    return validateEdgeBetweenNodes(sourceNode, targetNode);
+  };
+
   // --- Edge actions ---
-  const addEdge = (values: any) => {
+  const addEdge = (values: { source: string; target: string }) => {
     if (!activeTopologyId) return message.warning('Select a topology first');
-    const payload = { source: values.source, target: values.target };
+
+    const validationError = validateEdgeForm(values.source, values.target);
+    if (validationError) {
+      message.error(validationError);
+      return;
+    }
+
+    const payload = {
+      source: values.source.trim(),
+      target: values.target.trim(),
+    };
     fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -320,8 +369,27 @@ const App: React.FC = () => {
 
           <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Edge</Divider>
           <Form form={edgeForm} layout="vertical" onFinish={addEdge} style={{ marginBottom: 12 }}>
-            <Form.Item name="source" label="Source" rules={[{ required: true }]}> <Input /> </Form.Item>
-            <Form.Item name="target" label="Target" rules={[{ required: true }]}> <Input /> </Form.Item>
+            <Form.Item name="source" label="Source" rules={[{ required: true }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="target"
+              label="Target"
+              dependencies={['source']}
+              rules={[
+                { required: true },
+                {
+                  validator: async (_, value) => {
+                    const source = edgeForm.getFieldValue('source');
+                    if (!source || !value) return;
+                    const error = validateEdgeForm(source, value);
+                    if (error) throw new Error(error);
+                  },
+                },
+              ]}
+            >
+              <Input />
+            </Form.Item>
             <Button type="primary" htmlType="submit" block>Add Edge</Button>
           </Form>
 
