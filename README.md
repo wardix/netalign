@@ -257,6 +257,17 @@ Logs are one JSON object per line (`ts`, `level`, `msg`, plus fields). Sensitive
 
 **Known canvas limitation (Cytoscape):** the graph surface is primarily pointer/touch oriented. Screen-reader users should manage topology structure via the **sidebar** (add/rename/delete nodes and edges). Selection of graph elements is click/tap based; full canvas keyboard navigation (arrow keys between nodes, etc.) is **not** implemented. Prefer the control panel for structural edits.
 
+#### Canvas keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Esc` | Clear graph selection |
+| `Delete` / `Backspace` | Delete selected node or edge (confirm dialog) |
+| `Ctrl/⌘+Z` | Undo |
+| `Ctrl/⌘+Shift+Z` or `Ctrl+Y` | Redo |
+
+Also: search box (top-left) finds nodes by label/ID; toolbar **Fit** / **Focus**; optional **minimap** (bottom-left) to jump to a node.
+
 ---
 
 ## API Endpoints

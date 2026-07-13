@@ -1,12 +1,13 @@
 // src/components/TopologyGraph.tsx
-import React, { useEffect, useState, useRef } from 'react';
-import { Alert, Button, Empty, Spin } from 'antd';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AutoComplete, Button, Empty, Input, Spin } from 'antd';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { computeLayout, getConnectedPeerIds } from '../../shared/layoutEngine.ts';
 import type { NodePosition } from '../../shared/nodePosition.ts';
-import type { TopologyNode } from '../../shared/topologyNodes.ts';
+import { getNodeLabel, type TopologyNode } from '../../shared/topologyNodes.ts';
 import type { TopologyEdge } from '../../shared/types.ts';
+import { searchTopologyNodes } from '../../shared/nodeSearch.ts';
 import { EmptyTopologyGuide } from './EmptyTopologyGuide.tsx';
 
 interface NodePositionUpdate {
@@ -20,9 +21,13 @@ interface TopologyGraphProps {
   loading?: boolean;
   error?: string | null;
   hasTopology?: boolean;
+  selectedNodeId?: string | null;
+  selectedEdgeId?: string | null;
   onRetry?: () => void;
   onNodeSelect?: (nodeId: string) => void;
   onEdgeSelect?: (edgeId: string) => void;
+  onDeselect?: () => void;
+  onDeleteSelection?: () => void;
   onNodePositionsChange?: (
     updates: NodePositionUpdate[],
     previous: NodePositionUpdate[],
@@ -42,15 +47,36 @@ const canvasOverlayStyle: React.CSSProperties = {
   color: '#9ca3af',
 };
 
+const chromeButtonStyle: React.CSSProperties = {
+  minWidth: 40,
+  minHeight: 40,
+  padding: '0 10px',
+  borderRadius: 4,
+  border: '1px solid #9ca3af',
+  background: '#fff',
+  color: '#111827',
+  cursor: 'pointer',
+  fontWeight: 600,
+  fontSize: 14,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: '0 2px 0 rgba(0,0,0,0.06)',
+};
+
 const TopologyGraph: React.FC<TopologyGraphProps> = ({
   nodes,
   edges,
   loading = false,
   error = null,
   hasTopology = true,
+  selectedNodeId = null,
+  selectedEdgeId = null,
   onRetry,
   onNodeSelect,
   onEdgeSelect,
+  onDeselect,
+  onDeleteSelection,
   onNodePositionsChange,
   onResetLayout,
   onScaffoldSample,
@@ -60,11 +86,13 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   const [elements, setElements] = useState<any[]>([]);
   const [styles, setStyles] = useState<any[]>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const cyRef = useRef<any>(null);
   const dragStateRef = useRef<{
     nodeId: string;
     startPositions: Record<string, NodePosition>;
   } | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try {
@@ -79,6 +107,38 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
       setLayoutError(t('canvas.crashDetail'));
     }
   }, [nodes, edges, t]);
+
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      const el = cy.getElementById(nodeId);
+      if (!el || el.empty()) return;
+
+      cy.nodes().removeClass('search-hit');
+      cy.edges().unselect();
+      cy.nodes().unselect();
+      el.addClass('search-hit');
+      el.select();
+      cy.animate({
+        fit: { eles: el, padding: 100 },
+        duration: 280,
+      });
+      onNodeSelect?.(nodeId);
+
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = setTimeout(() => {
+        cy.nodes().removeClass('search-hit');
+      }, 2500);
+    },
+    [onNodeSelect],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -101,11 +161,20 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
     const onNodeTap = (evt: any) => {
       const id = evt.target.id();
+      cy.nodes().removeClass('search-hit');
       if (onNodeSelect) onNodeSelect(id);
     };
     const onEdgeTap = (evt: any) => {
       const id = evt.target.id();
+      cy.nodes().removeClass('search-hit');
       if (onEdgeSelect) onEdgeSelect(id);
+    };
+    const onBackgroundTap = (evt: any) => {
+      if (evt.target === cy) {
+        cy.nodes().removeClass('search-hit');
+        cy.elements().unselect();
+        onDeselect?.();
+      }
     };
     const onGrab = (evt: any) => {
       const node = evt.target;
@@ -180,6 +249,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     cy.nodes().grabify();
     cy.on('tap', 'node', onNodeTap);
     cy.on('tap', 'edge', onEdgeTap);
+    cy.on('tap', onBackgroundTap);
     cy.on('grab', 'node', onGrab);
     cy.on('drag', 'node', onDrag);
     cy.on('dragfree', 'node', onDragFree);
@@ -187,30 +257,137 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     return () => {
       cy.removeListener('tap', 'node', onNodeTap);
       cy.removeListener('tap', 'edge', onEdgeTap);
+      cy.removeListener('tap', onBackgroundTap);
       cy.removeListener('grab', 'node', onGrab);
       cy.removeListener('drag', 'node', onDrag);
       cy.removeListener('dragfree', 'node', onDragFree);
     };
-  }, [elements, nodes, edges, onNodeSelect, onEdgeSelect, onNodePositionsChange]);
+  }, [elements, nodes, edges, onNodeSelect, onEdgeSelect, onDeselect, onNodePositionsChange, t]);
+
+  // Keep cytoscape selection in sync with sidebar selection.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.elements().unselect();
+    if (selectedNodeId) {
+      const n = cy.getElementById(selectedNodeId);
+      if (n.nonempty()) n.select();
+    } else if (selectedEdgeId) {
+      const e = cy.getElementById(selectedEdgeId);
+      if (e.nonempty()) e.select();
+    }
+  }, [selectedNodeId, selectedEdgeId, elements]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        const cy = cyRef.current;
+        cy?.nodes().removeClass('search-hit');
+        cy?.elements().unselect();
+        onDeselect?.();
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (!selectedNodeId && !selectedEdgeId) return;
+        event.preventDefault();
+        onDeleteSelection?.();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onDeselect, onDeleteSelection, selectedNodeId, selectedEdgeId]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
-      cyRef.current.zoom(cyRef.current.zoom() * 1.2);
+      cyRef.current.zoom({
+        level: cyRef.current.zoom() * 1.2,
+        renderedPosition: {
+          x: cyRef.current.width() / 2,
+          y: cyRef.current.height() / 2,
+        },
+      });
     }
   };
 
   const handleZoomOut = () => {
     if (cyRef.current) {
-      cyRef.current.zoom(cyRef.current.zoom() / 1.2);
+      cyRef.current.zoom({
+        level: cyRef.current.zoom() / 1.2,
+        renderedPosition: {
+          x: cyRef.current.width() / 2,
+          y: cyRef.current.height() / 2,
+        },
+      });
     }
   };
 
   const handleFit = () => {
     if (cyRef.current) {
-      cyRef.current.fit();
-      cyRef.current.center();
+      cyRef.current.fit(undefined, 40);
     }
   };
+
+  const handleZoomSelection = () => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const selected = cy.$(':selected');
+    if (selected.nonempty()) {
+      cy.animate({ fit: { eles: selected, padding: 80 }, duration: 250 });
+      return;
+    }
+    if (selectedNodeId) {
+      focusNode(selectedNodeId);
+      return;
+    }
+    handleFit();
+  };
+
+  const searchHits = useMemo(
+    () => searchTopologyNodes(nodes, searchQuery),
+    [nodes, searchQuery],
+  );
+
+  const searchOptions = searchHits.slice(0, 12).map(hit => ({
+    value: hit.id,
+    label: `${hit.label} (${hit.type}) · ${hit.id}`,
+  }));
+
+  const minimap = useMemo(() => {
+    const positioned = elements.filter(
+      (el: any) => el.position && typeof el.data?.id === 'string' && el.data?.source === undefined,
+    ) as { data: { id: string; type?: string; color?: string }; position: NodePosition }[];
+    if (positioned.length === 0) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const el of positioned) {
+      minX = Math.min(minX, el.position.x);
+      minY = Math.min(minY, el.position.y);
+      maxX = Math.max(maxX, el.position.x);
+      maxY = Math.max(maxY, el.position.y);
+    }
+    const pad = 40;
+    minX -= pad;
+    minY -= pad;
+    maxX += pad;
+    maxY += pad;
+    const w = Math.max(maxX - minX, 1);
+    const h = Math.max(maxY - minY, 1);
+
+    return { positioned, minX, minY, w, h };
+  }, [elements]);
 
   const displayError = error || layoutError;
 
@@ -263,23 +440,6 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     );
   }
 
-  const chromeButtonStyle: React.CSSProperties = {
-    minWidth: 40,
-    minHeight: 40,
-    padding: '0 10px',
-    borderRadius: 4,
-    border: '1px solid #9ca3af',
-    background: '#fff',
-    color: '#111827',
-    cursor: 'pointer',
-    fontWeight: 600,
-    fontSize: 14,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 0 rgba(0,0,0,0.06)',
-  };
-
   return (
     <div
       style={{ position: 'relative', width: '100%', height: '100%' }}
@@ -287,12 +447,43 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
       aria-label={t('a11y.canvasRegion')}
     >
       <p className="visually-hidden" id="topology-canvas-desc">
-        {t('a11y.canvasLimitations')}
+        {t('a11y.canvasLimitations')} {t('canvas.shortcutsHelp')}
       </p>
+      <div
+        style={{
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          zIndex: 1000,
+          width: 'min(320px, calc(100% - 24px))',
+        }}
+      >
+        <AutoComplete
+          options={searchOptions}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onSelect={(value: string) => {
+            setSearchQuery(getNodeLabel(nodes.find(n => n.id === value)!) || value);
+            focusNode(value);
+          }}
+          style={{ width: '100%' }}
+        >
+          <Input.Search
+            allowClear
+            placeholder={t('canvas.searchPlaceholder')}
+            aria-label={t('canvas.searchPlaceholder')}
+            enterButton={t('canvas.search')}
+            onSearch={value => {
+              const hits = searchTopologyNodes(nodes, value);
+              if (hits[0]) focusNode(hits[0].id);
+            }}
+          />
+        </AutoComplete>
+      </div>
+
       <div
         style={{ width: '100%', height: '100%' }}
         aria-describedby="topology-canvas-desc"
-        // Cytoscape is pointer-oriented; expose a descriptive host for AT.
         role="img"
         aria-label={t('a11y.canvasGraph')}
       >
@@ -306,6 +497,48 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
           }}
         />
       </div>
+
+      {minimap && (
+        <div
+          role="img"
+          aria-label={t('canvas.minimap')}
+          title={t('canvas.minimapHint')}
+          style={{
+            position: 'absolute',
+            bottom: 20,
+            left: 12,
+            zIndex: 1000,
+            width: 140,
+            height: 100,
+            background: 'rgba(17, 24, 39, 0.9)',
+            border: '1px solid #6b7280',
+            borderRadius: 8,
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}
+        >
+          <svg width="100%" height="100%" viewBox={`0 0 ${minimap.w} ${minimap.h}`} preserveAspectRatio="xMidYMid meet">
+            {minimap.positioned.map(el => {
+              const isHit = el.data.id === selectedNodeId;
+              const r = el.data.type === 'subnet' ? 14 : 10;
+              return (
+                <circle
+                  key={el.data.id}
+                  cx={el.position.x - minimap.minX}
+                  cy={el.position.y - minimap.minY}
+                  r={r}
+                  fill={(el.data.color as string) || '#9ca3af'}
+                  stroke={isHit ? '#FBBF24' : 'rgba(255,255,255,0.35)'}
+                  strokeWidth={isHit ? 6 : 2}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => focusNode(el.data.id)}
+                />
+              );
+            })}
+          </svg>
+        </div>
+      )}
+
       <div
         className="canvas-toolbar"
         role="toolbar"
@@ -332,6 +565,15 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
           </button>
           <button type="button" onClick={handleFit} style={chromeButtonStyle} aria-label={t('canvas.fit')} title={t('canvas.fit')}>
             {t('canvas.fit')}
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomSelection}
+            style={chromeButtonStyle}
+            aria-label={t('canvas.zoomSelection')}
+            title={t('canvas.zoomSelection')}
+          >
+            {t('canvas.zoomSelection')}
           </button>
           {onResetLayout && (
             <button

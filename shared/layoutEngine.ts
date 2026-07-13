@@ -151,6 +151,15 @@ function buildBaseStyles(): CytoscapeStyle[] {
     },
     { selector: 'node:selected', style: { 'border-color': '#fff', 'border-width': 3, color: '#ffffff' } },
     {
+      selector: 'node.search-hit',
+      style: {
+        'border-color': '#FBBF24',
+        'border-width': 4,
+        'border-style': 'solid',
+        color: '#FDE68A',
+      },
+    },
+    {
       selector: 'edge[label]',
       style: {
         label: 'data(label)',
