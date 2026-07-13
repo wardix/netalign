@@ -126,6 +126,8 @@ export const translations = {
     'wizard.scaffoldDone': 'Contoh topologi berhasil dibuat',
     'wizard.scaffoldFailed': 'Gagal membuat contoh topologi',
     'wizard.notEmpty': 'Topologi ini sudah berisi node',
+    'layout.showPanel': 'Panel',
+    'layout.hidePanel': 'Sembunyikan',
     'error.edge.invalidConnection':
       'Koneksi tidak valid: router dan instans hanya dapat terhubung langsung ke subnet.',
     'error.edge.duplicate': 'Edge antara node ini sudah ada',
@@ -253,6 +255,8 @@ export const translations = {
     'wizard.scaffoldDone': 'Sample topology created',
     'wizard.scaffoldFailed': 'Failed to create sample topology',
     'wizard.notEmpty': 'This topology already has nodes',
+    'layout.showPanel': 'Panel',
+    'layout.hidePanel': 'Hide panel',
     'error.edge.invalidConnection':
       'Invalid connection: routers and instances can only connect directly to subnets.',
     'error.edge.duplicate': 'Edge already exists between these nodes',

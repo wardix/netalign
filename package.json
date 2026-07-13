@@ -8,7 +8,7 @@
     "dev:all": "concurrently -k -n server,web -c blue,magenta \"bun run server\" \"bun run dev\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "bun test --preload ./server/testPreload.ts --preload ./server/domPreload.ts shared server scripts src/history src/api.test.ts src/api/client.test.ts src/i18n/translations.test.ts src/hooks/selectionUtils.test.ts src/components/GraphErrorBoundary.test.tsx",
+    "test": "bun test --preload ./server/testPreload.ts --preload ./server/domPreload.ts shared server scripts src/history src/api.test.ts src/api/client.test.ts src/i18n/translations.test.ts src/hooks/selectionUtils.test.ts src/hooks/useMediaQuery.test.ts src/components/GraphErrorBoundary.test.tsx",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
     "db:reset": "bun run scripts/db-reset.ts",

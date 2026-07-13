@@ -5,6 +5,7 @@ import { useTopology } from './hooks/useTopology.ts';
 import { useSelection } from './hooks/useSelection.ts';
 import { useTopologyMutations } from './hooks/useTopologyMutations.ts';
 import { useCommandHistory } from './hooks/useCommandHistory.ts';
+import { useIsNarrowLayout } from './hooks/useMediaQuery.ts';
 import { useI18n } from './i18n/I18nProvider.tsx';
 import { AppHeader } from './components/AppHeader.tsx';
 import { GraphErrorBoundary } from './components/GraphErrorBoundary.tsx';
@@ -24,6 +25,8 @@ const graphFallbackStyle: React.CSSProperties = {
 
 const App: React.FC = () => {
   const { t } = useI18n();
+  const isNarrow = useIsNarrowLayout();
+  const [siderCollapsed, setSiderCollapsed] = useState(false);
   const { topologies, error: topologiesError, refresh: refreshTopologies } = useTopologies(
     t('topologies.loadFailed'),
   );
@@ -99,6 +102,11 @@ const App: React.FC = () => {
     }
   }, [topologies, activeTopologyId]);
 
+  // Default: collapse panel on narrow viewports so the graph gets full width.
+  useEffect(() => {
+    setSiderCollapsed(isNarrow);
+  }, [isNarrow]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -134,6 +142,8 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [canUndo, canRedo, undo, redo]);
 
+  const panelOpen = !siderCollapsed;
+
   return (
     <Layout style={{ height: '100vh', background: '#0e1117' }}>
       <AppHeader
@@ -141,8 +151,11 @@ const App: React.FC = () => {
         canRedo={canRedo}
         onUndo={() => void undo()}
         onRedo={() => void redo()}
+        showPanelToggle
+        panelOpen={panelOpen}
+        onTogglePanel={() => setSiderCollapsed(prev => !prev)}
       />
-      <Layout style={{ background: '#0e1117' }}>
+      <Layout style={{ background: '#0e1117', minHeight: 0, flex: 1 }} id="topology-sidebar">
         <TopologySidebar
           topologies={topologies}
           activeTopologyId={activeTopologyId}
@@ -151,7 +164,10 @@ const App: React.FC = () => {
           selectedNodeData={selection.selectedNodeData}
           selectedEdgeId={selection.selectedEdgeId}
           selectedEdgeData={selection.selectedEdgeData}
-          onSelectTopology={setActiveTopologyId}
+          onSelectTopology={id => {
+            setActiveTopologyId(id);
+            if (isNarrow) setSiderCollapsed(true);
+          }}
           onCreateTopology={mutations.createTopology}
           onRenameTopology={mutations.renameTopology}
           onDeleteTopology={mutations.deleteTopology}
@@ -164,6 +180,9 @@ const App: React.FC = () => {
           onDeleteNode={mutations.deleteNode}
           onUpdateEdgeGateway={mutations.updateEdgeGateway}
           onDeleteEdge={mutations.deleteEdge}
+          isNarrow={isNarrow}
+          collapsed={siderCollapsed}
+          onCollapsedChange={setSiderCollapsed}
         />
         <Content
           style={{
@@ -171,6 +190,8 @@ const App: React.FC = () => {
             background: '#0e1117',
             backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 0)',
             backgroundSize: '24px 24px',
+            minWidth: 0,
+            minHeight: 0,
           }}
         >
           <GraphErrorBoundary
