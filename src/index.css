@@ -19,3 +19,51 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Skip link: first focusable control for keyboard users */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: 0;
+  z-index: 10000;
+  padding: 8px 14px;
+  background: #1f2937;
+  color: #f9fafb;
+  border: 2px solid #60a5fa;
+  border-radius: 0 0 8px 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transform: translateY(-120%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+  outline: none;
+}
+
+/* Visible focus for custom canvas chrome buttons */
+.canvas-toolbar button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Prefer system focus ring on interactive Ant Design controls where missing */
+.ant-btn:focus-visible,
+.ant-select-focused .ant-select-selector {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

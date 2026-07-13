@@ -212,6 +212,18 @@ test.describe('NetAlign dashboard', () => {
     await expect(page.locator('.ant-layout-sider .ant-select').first()).toBeVisible();
   });
 
+  test('exposes skip link and labeled canvas toolbar for a11y', async ({ page }) => {
+    const skip = page.getByRole('link', { name: 'Lompat ke kanvas' });
+    await skip.focus();
+    await expect(skip).toBeFocused();
+    await skip.press('Enter');
+    await expect(page.locator('#main-content')).toBeFocused();
+
+    await expect(page.getByRole('toolbar', { name: 'Kontrol zoom dan tata letak kanvas' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Perbesar' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Panel kontrol topologi' })).toBeVisible();
+  });
+
   test('empty topology shows guided wizard and sample scaffold', async ({ page }) => {
     await page.getByRole('button', { name: 'Baru' }).click();
     const nameInput = page.locator('.ant-modal-confirm .ant-form-item').filter({

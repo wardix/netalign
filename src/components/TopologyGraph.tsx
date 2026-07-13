@@ -263,109 +263,82 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     );
   }
 
+  const chromeButtonStyle: React.CSSProperties = {
+    minWidth: 40,
+    minHeight: 40,
+    padding: '0 10px',
+    borderRadius: 4,
+    border: '1px solid #9ca3af',
+    background: '#fff',
+    color: '#111827',
+    cursor: 'pointer',
+    fontWeight: 600,
+    fontSize: 14,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 0 rgba(0,0,0,0.06)',
+  };
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <CytoscapeComponent
-        elements={elements}
-        style={{ width: '100%', height: '100%' }}
-        stylesheet={styles}
-        layout={{ name: 'preset' }}
-        cy={cy => {
-          cyRef.current = cy;
-        }}
-      />
+    <div
+      style={{ position: 'relative', width: '100%', height: '100%' }}
+      role="region"
+      aria-label={t('a11y.canvasRegion')}
+    >
+      <p className="visually-hidden" id="topology-canvas-desc">
+        {t('a11y.canvasLimitations')}
+      </p>
       <div
+        style={{ width: '100%', height: '100%' }}
+        aria-describedby="topology-canvas-desc"
+        // Cytoscape is pointer-oriented; expose a descriptive host for AT.
+        role="img"
+        aria-label={t('a11y.canvasGraph')}
+      >
+        <CytoscapeComponent
+          elements={elements}
+          style={{ width: '100%', height: '100%' }}
+          stylesheet={styles}
+          layout={{ name: 'preset' }}
+          cy={cy => {
+            cyRef.current = cy;
+          }}
+        />
+      </div>
+      <div
+        className="canvas-toolbar"
+        role="toolbar"
+        aria-label={t('a11y.canvasToolbar')}
         style={{
           position: 'absolute',
           bottom: 20,
           right: 20,
           zIndex: 1000,
-          background: 'rgba(255, 255, 255, 0.8)',
-          padding: '6px 10px',
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '8px 10px',
           borderRadius: 8,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
           backdropFilter: 'blur(4px)',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          border: '1px solid #6b7280',
         }}
       >
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={handleZoomIn}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 4,
-              border: '1px solid #d9d9d9',
-              background: '#fff',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
-            }}
-            title={t('canvas.zoomIn')}
-          >
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" onClick={handleZoomIn} style={chromeButtonStyle} aria-label={t('canvas.zoomIn')} title={t('canvas.zoomIn')}>
             +
           </button>
-          <button
-            onClick={handleZoomOut}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 4,
-              border: '1px solid #d9d9d9',
-              background: '#fff',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
-            }}
-            title={t('canvas.zoomOut')}
-          >
-            -
+          <button type="button" onClick={handleZoomOut} style={chromeButtonStyle} aria-label={t('canvas.zoomOut')} title={t('canvas.zoomOut')}>
+            −
           </button>
-          <button
-            onClick={handleFit}
-            style={{
-              padding: '0 10px',
-              height: 32,
-              borderRadius: 4,
-              border: '1px solid #d9d9d9',
-              background: '#fff',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
-            }}
-            title={t('canvas.fit')}
-          >
+          <button type="button" onClick={handleFit} style={chromeButtonStyle} aria-label={t('canvas.fit')} title={t('canvas.fit')}>
             {t('canvas.fit')}
           </button>
           {onResetLayout && (
             <button
+              type="button"
               onClick={onResetLayout}
-              style={{
-                padding: '0 10px',
-                height: 32,
-                borderRadius: 4,
-                border: '1px solid #d9d9d9',
-                background: '#fff',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
-              }}
+              style={chromeButtonStyle}
+              aria-label={t('canvas.resetLayout')}
               title={t('canvas.resetLayout')}
             >
               {t('canvas.resetLayout')}

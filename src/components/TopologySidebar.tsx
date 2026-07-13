@@ -2,6 +2,7 @@ import React from 'react';
 import { Drawer, Layout } from 'antd';
 import type { TopologyEdge, TopologyNode, TopologyNodeTypeValue, TopologySummary } from '../../shared/types.ts';
 import type { SelectedNodeData } from '../hooks/useSelection.ts';
+import { useI18n } from '../i18n/I18nProvider.tsx';
 import { TopologyManager } from './TopologyManager.tsx';
 import { NodePanel } from './NodePanel.tsx';
 import { EdgePanel } from './EdgePanel.tsx';
@@ -78,8 +79,15 @@ export const TopologySidebar: React.FC<TopologySidebarProps> = ({
   collapsed = false,
   onCollapsedChange,
 }) => {
+  const { t } = useI18n();
   const panels = (
-    <div style={panelStyle} data-testid="topology-sidebar-panels">
+    <div
+      style={panelStyle}
+      data-testid="topology-sidebar-panels"
+      id="topology-sidebar"
+      role="navigation"
+      aria-label={t('a11y.sidebarNav')}
+    >
       <TopologyManager
         topologies={topologies}
         activeTopologyId={activeTopologyId}
@@ -113,17 +121,18 @@ export const TopologySidebar: React.FC<TopologySidebarProps> = ({
   if (isNarrow) {
     return (
       <Drawer
-        title={null}
+        title={t('a11y.sidebarNav')}
         placement="left"
         width={Math.min(300, typeof window !== 'undefined' ? window.innerWidth - 24 : 300)}
         open={!collapsed}
         onClose={() => onCollapsedChange?.(true)}
         styles={{
           body: { padding: 0, background: 'rgba(20, 24, 33, 0.98)' },
-          header: { display: 'none' },
+          header: { background: 'rgba(20, 24, 33, 0.98)', color: '#f3f4f6', borderBottom: '1px solid rgba(255,255,255,0.08)' },
         }}
         destroyOnClose={false}
         data-testid="topology-sidebar-drawer"
+        aria-label={t('a11y.sidebarNav')}
       >
         {/* Keep .ant-layout-sider class absent; E2E desktop still uses Sider path. */}
         <div className="ant-layout-sider" style={{ background: 'transparent', width: '100%' }}>

@@ -247,6 +247,16 @@ Copy `.env.example` to `.env` and adjust as needed:
 
 Logs are one JSON object per line (`ts`, `level`, `msg`, plus fields). Sensitive keys (`password`, `token`, …) are redacted. Every response includes `x-request-id` (echoed from the request header when provided).
 
+### Accessibility
+
+- **Skip link**: first Tab focuses “Skip to canvas” / “Lompat ke kanvas”.
+- **Sidebar**: labeled navigation region; forms use Ant Design labels; topology select and actions are keyboard-reachable (Tab / Enter / Space). Delete/confirm flows use Ant Design modals (keyboard OK/Cancel).
+- **Header**: panel toggle, undo/redo, and locale control expose accessible names; undo/redo advertise shortcuts via `aria-keyshortcuts`.
+- **Canvas chrome**: zoom / fit / auto-layout toolbar buttons have visible text or `aria-label` (not icon-only without names). Focus rings are visible on toolbar buttons.
+- **Document language**: `<html lang>` follows the UI locale (`id` / `en`).
+
+**Known canvas limitation (Cytoscape):** the graph surface is primarily pointer/touch oriented. Screen-reader users should manage topology structure via the **sidebar** (add/rename/delete nodes and edges). Selection of graph elements is click/tap based; full canvas keyboard navigation (arrow keys between nodes, etc.) is **not** implemented. Prefer the control panel for structural edits.
+
 ---
 
 ## API Endpoints

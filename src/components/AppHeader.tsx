@@ -28,10 +28,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const isMac =
     typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
   const undoShortcut = isMac ? '⌘Z' : 'Ctrl+Z';
-  const redoShortcut = isMac ? '⌘⇧Z' : 'Ctrl+Shift+Z';
+  const redoShortcut = isMac ? '⌘⇧Z' : 'Ctrl/Cmd+Shift+Z';
 
   return (
     <Header
+      role="banner"
       style={{
         background: 'rgba(20, 24, 33, 0.85)',
         color: '#f3f4f6',
@@ -54,6 +55,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={onTogglePanel}
             aria-expanded={panelOpen}
             aria-controls="topology-sidebar"
+            aria-label={panelOpen ? t('layout.hidePanel') : t('layout.showPanel')}
             style={{ minWidth: 44, minHeight: 36 }}
           >
             {panelOpen ? t('layout.hidePanel') : t('layout.showPanel')}
@@ -61,14 +63,26 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </Tooltip>
       )}
       <span style={{ whiteSpace: 'nowrap' }}>{t('app.title')}</span>
-      <Space size={8} style={{ marginLeft: 4 }} wrap>
+      <Space size={8} style={{ marginLeft: 4 }} wrap role="group" aria-label={t('a11y.historyGroup')}>
         <Tooltip title={`${t('history.undo')} (${undoShortcut})`}>
-          <Button size="small" disabled={!canUndo || !onUndo} onClick={onUndo}>
+          <Button
+            size="small"
+            disabled={!canUndo || !onUndo}
+            onClick={onUndo}
+            aria-label={`${t('history.undo')} (${undoShortcut})`}
+            aria-keyshortcuts={isMac ? 'Meta+Z' : 'Control+Z'}
+          >
             {t('history.undo')}
           </Button>
         </Tooltip>
         <Tooltip title={`${t('history.redo')} (${redoShortcut})`}>
-          <Button size="small" disabled={!canRedo || !onRedo} onClick={onRedo}>
+          <Button
+            size="small"
+            disabled={!canRedo || !onRedo}
+            onClick={onRedo}
+            aria-label={`${t('history.redo')} (${redoShortcut})`}
+            aria-keyshortcuts={isMac ? 'Meta+Shift+Z' : 'Control+Shift+Z'}
+          >
             {t('history.redo')}
           </Button>
         </Tooltip>
@@ -78,6 +92,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         value={locale}
         onChange={setLocale}
         style={{ width: 72, marginLeft: 'auto' }}
+        aria-label={t('a11y.localeSelect')}
         options={[
           { value: 'id', label: t('locale.id') },
           { value: 'en', label: t('locale.en') },

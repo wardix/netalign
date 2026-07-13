@@ -41,6 +41,8 @@ export const TopologyManager: React.FC<TopologyManagerProps> = ({
         placeholder={t('topologies.select')}
         value={activeTopologyId || undefined}
         onChange={id => onSelectTopology(id)}
+        aria-label={t('topologies.select')}
+        listHeight={256}
       >
         {topologies.map(topology => (
           <Select.Option key={topology.id} value={topology.id}>
@@ -48,7 +50,7 @@ export const TopologyManager: React.FC<TopologyManagerProps> = ({
           </Select.Option>
         ))}
       </Select>
-      <Space wrap style={{ marginTop: 8, width: '100%' }}>
+      <Space wrap style={{ marginTop: 8, width: '100%' }} role="group" aria-label={t('topologies.title')}>
         <Button
           type="primary"
           onClick={() => {
@@ -105,12 +107,17 @@ export const TopologyManager: React.FC<TopologyManagerProps> = ({
         <Button disabled={!activeTopologyId} onClick={() => void onExportTopology()}>
           {t('topologies.export')}
         </Button>
-        <Button onClick={() => fileInputRef.current?.click()}>{t('topologies.import')}</Button>
+        <Button onClick={() => fileInputRef.current?.click()} aria-label={t('topologies.import')}>
+          {t('topologies.import')}
+        </Button>
         <input
           ref={fileInputRef}
+          id="topology-import-file"
           type="file"
           accept="application/json,.json"
           style={{ display: 'none' }}
+          aria-label={t('topologies.import')}
+          tabIndex={-1}
           onChange={async event => {
             const file = event.target.files?.[0];
             event.target.value = '';
