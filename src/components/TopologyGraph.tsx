@@ -10,6 +10,7 @@ interface TopologyEdge {
   id: string;
   source: string;
   target: string;
+  gateway?: string;
 }
 
 interface GraphNode extends TopologyNode {
@@ -197,7 +198,14 @@ function buildGraphElements(nodes: GraphNode[], edges: TopologyEdge[]) {
   const edgeStyles: any[] = [];
   edges.forEach(e => {
     const edgeId = e.id || buildEdgeId(e.source, e.target);
-    cyElements.push({ data: { id: edgeId, source: e.source, target: e.target } });
+    cyElements.push({
+      data: {
+        id: edgeId,
+        source: e.source,
+        target: e.target,
+        ...(e.gateway ? { label: e.gateway } : {}),
+      },
+    });
     const srcNode = nodes.find(n => n.id === e.source);
     const tgtNode = nodes.find(n => n.id === e.target);
     if (!srcNode || !tgtNode) return;
@@ -240,6 +248,12 @@ function buildGraphElements(nodes: GraphNode[], edges: TopologyEdge[]) {
         'curve-style': 'straight',
         'source-endpoint': sourceEndpoint,
         'target-endpoint': targetEndpoint,
+        ...(e.gateway
+          ? {
+              color: subnetColor,
+              'text-outline-color': subnetColor,
+            }
+          : {}),
       },
     });
   });
@@ -311,6 +325,20 @@ function buildGraphElements(nodes: GraphNode[], edges: TopologyEdge[]) {
       style: { 'border-color': 'rgba(255,255,255,0.2)', 'background-opacity': 0.85 },
     },
     { selector: 'node:selected', style: { 'border-color': '#fff', 'border-width': 3, color: '#ffffff' } },
+    {
+      selector: 'edge[label]',
+      style: {
+        label: 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'font-size': 9,
+        'font-weight': '600',
+        'text-outline-width': 3,
+        'text-outline-opacity': 0.85,
+        'text-background-opacity': 0,
+        'text-margin-y': 0,
+      },
+    },
     { selector: 'edge:selected', style: { width: 4.5, 'line-color': '#fff' } },
     ...edgeStyles,
   ];

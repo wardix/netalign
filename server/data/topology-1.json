@@ -50,27 +50,14 @@
       "data": {
         "label": "VM-3"
       }
-    },
-    {
-      "id": "subnet-e2e-1783931579446",
-      "type": "subnet",
-      "data": {
-        "label": "E2E Subnet"
-      }
-    },
-    {
-      "id": "router-e2e-1783931579869",
-      "type": "router",
-      "data": {
-        "label": "E2E Router 1783931579869"
-      }
     }
   ],
   "edges": [
     {
       "id": "e-router-1-subnet-1",
       "source": "router-1",
-      "target": "subnet-1"
+      "target": "subnet-1",
+      "gateway": "10.0.1.1"
     },
     {
       "id": "e-router-2-subnet-1",
@@ -96,11 +83,6 @@
       "id": "e-subnet-2-vm-3",
       "source": "subnet-2",
       "target": "vm-3"
-    },
-    {
-      "id": "e-router-e2e-1783931579869-subnet-1",
-      "source": "router-e2e-1783931579869",
-      "target": "subnet-1"
     }
   ]
 }
