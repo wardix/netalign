@@ -1,6 +1,30 @@
 import { describe, expect, test } from 'bun:test';
 import server from './index.ts';
 
+describe('CORS allowlist', () => {
+  test('reflects allowed local origin in development defaults', async () => {
+    const response = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        headers: { Origin: 'http://localhost:3000' },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
+  });
+
+  test('does not allow unknown browser origin', async () => {
+    const response = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        headers: { Origin: 'https://evil.example.com' },
+      }),
+    );
+    // Request still handled; CORS middleware omits allow-origin for disallowed origins.
+    expect(response.headers.get('Access-Control-Allow-Origin')).not.toBe(
+      'https://evil.example.com',
+    );
+  });
+});
+
 describe('topology ID path traversal protection', () => {
   test('rejects traversal in GET /api/topologies/:id', async () => {
     const response = await server.fetch(

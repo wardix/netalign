@@ -17,13 +17,27 @@ import type {
   UpdateNodeBody,
 } from '../shared/types.ts';
 import { parseTopologyImport } from '../shared/topologyImport.ts';
+import { createCorsOriginResolver } from './corsConfig.ts';
 import { validateRouteId } from './paths.ts';
 import * as topologyStore from './topologyStore.ts';
 import type { Context } from 'hono';
 
 const app = new Hono();
 
-app.use('*', cors());
+const resolveCorsOrigin = createCorsOriginResolver(
+  Bun.env.CORS_ORIGINS ?? process.env.CORS_ORIGINS,
+  Bun.env.NODE_ENV ?? process.env.NODE_ENV,
+);
+
+app.use(
+  '*',
+  cors({
+    origin: origin => resolveCorsOrigin(origin) ?? undefined,
+    allowMethods: ['GET', 'HEAD', 'PUT', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400,
+  }),
+);
 
 function invalidIdResponse(c: Context, id: string) {
   const validation = validateRouteId(id);
