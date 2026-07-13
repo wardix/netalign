@@ -12,6 +12,10 @@ import {
   toExportDocument,
 } from '../../shared/topologyImport.ts';
 import { isProtectedTopologyId } from '../../shared/protectedTopologies.ts';
+import {
+  computeLayout,
+  layoutResultToPositionUpdates,
+} from '../../shared/layoutEngine.ts';
 import type { TopologyEdge, TopologyNode, TopologyNodeTypeValue, TopologySummary } from '../../shared/types.ts';
 import type { HistoryCommand } from '../history/historyStack.ts';
 import type { SelectedNodeData } from './useSelection.ts';
@@ -70,6 +74,8 @@ export interface UseTopologyMutationsResult {
   deleteEdge: (edgeId: string) => void;
   exportTopology: () => Promise<boolean>;
   importTopology: (file: File) => Promise<boolean>;
+  /** Re-run auto-layout, persist new positions, record history. */
+  resetLayout: () => Promise<boolean>;
 }
 
 export function useTopologyMutations(options: UseTopologyMutationsOptions): UseTopologyMutationsResult {
@@ -547,6 +553,55 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     [refreshTopologies, setActiveTopologyId, showApiError, t],
   );
 
+  const resetLayout = useCallback(async () => {
+    if (!activeTopologyId) {
+      message.warning(t('common.selectTopologyFirst'));
+      return false;
+    }
+    if (nodes.length === 0) {
+      message.warning(t('canvas.noNodes'));
+      return false;
+    }
+
+    const previousLayout = computeLayout(nodes, edges);
+    const previous = layoutResultToPositionUpdates(previousLayout);
+    const nextLayout = computeLayout(nodes, edges, undefined, { ignoreSavedPositions: true });
+    const updates = layoutResultToPositionUpdates(nextLayout);
+
+    cache.patchNodePositions(updates);
+
+    try {
+      await topologyApi.updateNodePositions(activeTopologyId, updates);
+      if (previous.length > 0) {
+        recordHistory({
+          type: 'moveNodes',
+          topologyId: activeTopologyId,
+          previous,
+          next: updates,
+        });
+      }
+      message.success(t('canvas.layoutReset'));
+      return true;
+    } catch (err) {
+      if (previous.length > 0) {
+        cache.patchNodePositions(previous);
+      } else {
+        await silentRefresh();
+      }
+      showApiError(err, 'canvas.layoutResetFailed');
+      return false;
+    }
+  }, [
+    activeTopologyId,
+    cache,
+    edges,
+    nodes,
+    recordHistory,
+    showApiError,
+    silentRefresh,
+    t,
+  ]);
+
   return {
     createTopology,
     renameTopology,
@@ -562,5 +617,6 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
     deleteEdge,
     exportTopology,
     importTopology,
+    resetLayout,
   };
 }
