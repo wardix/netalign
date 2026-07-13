@@ -11,6 +11,7 @@ import {
   sanitizeExportFilename,
   toExportDocument,
 } from '../../shared/topologyImport.ts';
+import { isProtectedTopologyId } from '../../shared/protectedTopologies.ts';
 import type { TopologyEdge, TopologyNode, TopologyNodeTypeValue, TopologySummary } from '../../shared/types.ts';
 import type { HistoryCommand } from '../history/historyStack.ts';
 import type { SelectedNodeData } from './useSelection.ts';
@@ -133,7 +134,7 @@ export function useTopologyMutations(options: UseTopologyMutationsOptions): UseT
 
   const deleteTopology = useCallback(() => {
     if (!activeTopologyId) return;
-    if (activeTopologyId === 'topology-1') {
+    if (isProtectedTopologyId(activeTopologyId)) {
       Modal.info({ title: t('topologies.protectedTitle'), content: t('topologies.protectedContent') });
       return;
     }
