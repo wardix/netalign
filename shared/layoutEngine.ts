@@ -18,10 +18,41 @@ export interface LayoutResult {
   styles: CytoscapeStyle[];
 }
 
-export const SUBNET_PALETTE = ['#F5A623', '#50E3C2', '#4A90E2', '#7ED321', '#E67E22', '#1ABC9C'] as const;
+export interface ComputeLayoutOptions {
+  /** When true, ignore `node.position` and recompute a fresh auto-layout. */
+  ignoreSavedPositions?: boolean;
+}
+
+/** Premium dark-mode subnet palette (unique colors; extras use golden-angle HSL). */
+export const SUBNET_PALETTE = [
+  '#F5A623',
+  '#50E3C2',
+  '#4A90E2',
+  '#7ED321',
+  '#E67E22',
+  '#1ABC9C',
+  '#9B59B6',
+  '#E74C3C',
+  '#3498DB',
+  '#2ECC71',
+  '#F39C12',
+  '#16A085',
+  '#E91E63',
+  '#00BCD4',
+  '#8BC34A',
+  '#FF5722',
+] as const;
+
 export const ROUTER_COLOR = '#BD10E0';
 export const INSTANCE_COLOR = '#FF6B6B';
-export const SUBNET_HEIGHT = 200;
+
+/** Minimum subnet bar height (also used when a subnet has few peers). */
+export const SUBNET_HEIGHT_MIN = 200;
+/** @deprecated Prefer SUBNET_HEIGHT_MIN — kept for existing imports. */
+export const SUBNET_HEIGHT = SUBNET_HEIGHT_MIN;
+export const SUBNET_HEIGHT_MAX = 720;
+/** Vertical budget per peer slot when growing subnet height. */
+export const SUBNET_HEIGHT_PER_PEER = 40;
 export const SUBNET_Y = 300;
 
 const ROUTER_SVG =
@@ -44,6 +75,32 @@ const INSTANCE_SVG =
             <line x1="6" y1="18" x2="6.01" y2="18"/>
           </svg>
         `);
+
+/**
+ * Subnet bar height from max peer count on either side.
+ * Grows so horizontal slot spacing stays readable for dense connections.
+ */
+export function computeSubnetHeight(maxPeersOnOneSide: number): number {
+  const peers = Math.max(0, maxPeersOnOneSide);
+  if (peers <= 1) return SUBNET_HEIGHT_MIN;
+  const needed = (peers + 1) * SUBNET_HEIGHT_PER_PEER;
+  return Math.min(SUBNET_HEIGHT_MAX, Math.max(SUBNET_HEIGHT_MIN, needed));
+}
+
+/** Stable color for a subnet: palette by index, then golden-angle HSL (unique per index). */
+export function colorForSubnet(_subnetId: string, index: number): string {
+  if (index >= 0 && index < SUBNET_PALETTE.length) {
+    return SUBNET_PALETTE[index]!;
+  }
+  const extra = index - SUBNET_PALETTE.length;
+  const hue = Math.round((extra * 137.508) % 360);
+  return `hsl(${hue} 62% 52%)`;
+}
+
+function peerSlotY(subnetY: number, subnetHeight: number, index: number, count: number): number {
+  if (count <= 1) return subnetY;
+  return subnetY - subnetHeight / 2 + (subnetHeight / (count + 1)) * (index + 1);
+}
 
 function buildBaseStyles(): CytoscapeStyle[] {
   return [
@@ -115,14 +172,17 @@ export function computeLayout(
   nodes: TopologyNode[],
   edges: TopologyEdge[],
   positionOverrides?: Record<string, NodePosition>,
+  options?: ComputeLayoutOptions,
 ): LayoutResult {
+  const ignoreSavedPositions = options?.ignoreSavedPositions === true;
+
   const subnets = nodes.filter(n => n.type === 'subnet');
   const routers = nodes.filter(n => n.type === 'router');
   const instances = nodes.filter(n => n.type === 'instance' || n.type === 'vm');
 
   const subnetColors: Record<string, string> = {};
   subnets.forEach((s, i) => {
-    subnetColors[s.id] = SUBNET_PALETTE[i % SUBNET_PALETTE.length];
+    subnetColors[s.id] = colorForSubnet(s.id, i);
   });
 
   const subnetLeftNodes: Record<string, string[]> = {};
@@ -146,8 +206,11 @@ export function computeLayout(
     if (!src || !tgt) return;
     if (src.type === 'router' && tgt.type === 'subnet') routerConnectedSubnets[src.id].push(tgt.id);
     else if (src.type === 'subnet' && tgt.type === 'router') routerConnectedSubnets[tgt.id].push(src.id);
-    else if (src.type === 'instance' && tgt.type === 'subnet') instanceConnectedSubnets[src.id].push(tgt.id);
-    else if (src.type === 'subnet' && tgt.type === 'instance') instanceConnectedSubnets[tgt.id].push(src.id);
+    else if ((src.type === 'instance' || src.type === 'vm') && tgt.type === 'subnet') {
+      instanceConnectedSubnets[src.id].push(tgt.id);
+    } else if (src.type === 'subnet' && (tgt.type === 'instance' || tgt.type === 'vm')) {
+      instanceConnectedSubnets[tgt.id].push(src.id);
+    }
   });
 
   const multiSubnetRouters: string[] = [];
@@ -169,6 +232,12 @@ export function computeLayout(
     }
   });
 
+  const subnetHeights: Record<string, number> = {};
+  subnets.forEach(s => {
+    const maxPeers = Math.max(subnetLeftNodes[s.id].length, subnetRightNodes[s.id].length);
+    subnetHeights[s.id] = computeSubnetHeight(maxPeers);
+  });
+
   const pos: Record<string, { x: number; y: number }> = {};
   subnets.forEach((s, idx) => {
     const x = 320 + idx * 350;
@@ -183,12 +252,10 @@ export function computeLayout(
   subnets.forEach(s => {
     const left = subnetLeftNodes[s.id];
     const n = left.length;
+    const height = subnetHeights[s.id];
     const baseX = pos[s.id].x - 200;
     left.forEach((id, i) => {
-      let y = SUBNET_Y;
-      if (n > 1) {
-        y = SUBNET_Y - SUBNET_HEIGHT / 2 + (SUBNET_HEIGHT / (n + 1)) * (i + 1);
-      }
+      const y = peerSlotY(SUBNET_Y, height, i, n);
       pos[id] = { x: baseX, y };
       subnetEndpoints[s.id][id] = { side: 'left', offset: y - SUBNET_Y };
     });
@@ -197,12 +264,10 @@ export function computeLayout(
   subnets.forEach((s, idx) => {
     const right = subnetRightNodes[s.id];
     const n = right.length;
+    const height = subnetHeights[s.id];
     const baseX = idx === subnets.length - 1 ? pos[s.id].x + 200 : pos[s.id].x + 150;
     right.forEach((id, i) => {
-      let y = SUBNET_Y;
-      if (n > 1) {
-        y = SUBNET_Y - SUBNET_HEIGHT / 2 + (SUBNET_HEIGHT / (n + 1)) * (i + 1);
-      }
+      const y = peerSlotY(SUBNET_Y, height, i, n);
       pos[id] = { x: baseX, y };
       subnetEndpoints[s.id][id] = { side: 'right', offset: y - SUBNET_Y };
     });
@@ -220,7 +285,9 @@ export function computeLayout(
     });
   });
 
-  applySavedPositions(nodes, pos);
+  if (!ignoreSavedPositions) {
+    applySavedPositions(nodes, pos);
+  }
   if (positionOverrides) {
     Object.assign(pos, positionOverrides);
   }
@@ -236,7 +303,7 @@ export function computeLayout(
         color: subnetColors[s.id],
         shape: 'round-rectangle',
         width: 20,
-        height: SUBNET_HEIGHT,
+        height: subnetHeights[s.id],
       },
       position: pos[s.id],
     });
@@ -409,4 +476,18 @@ export function getConnectedPeerIds(
   });
 
   return [...peerIds];
+}
+
+/** Collect node position snapshots from a layout result (nodes only). */
+export function layoutResultToPositionUpdates(
+  result: LayoutResult,
+): { nodeId: string; position: NodePosition }[] {
+  const updates: { nodeId: string; position: NodePosition }[] = [];
+  for (const el of result.elements) {
+    const id = el.data.id;
+    if (typeof id !== 'string' || !el.position) continue;
+    if (el.data.source !== undefined) continue; // edge
+    updates.push({ nodeId: id, position: { x: el.position.x, y: el.position.y } });
+  }
+  return updates;
 }

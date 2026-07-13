@@ -189,6 +189,7 @@ const App: React.FC = () => {
               onNodeSelect={selection.selectNode}
               onEdgeSelect={selection.selectEdge}
               onNodePositionsChange={mutations.saveNodePositions}
+              onResetLayout={() => void mutations.resetLayout()}
             />
           </Suspense>
         </Content>

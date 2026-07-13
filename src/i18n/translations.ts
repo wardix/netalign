@@ -102,6 +102,9 @@ export const translations = {
     'canvas.zoomIn': 'Perbesar',
     'canvas.zoomOut': 'Perkecil',
     'canvas.fit': 'Sesuaikan',
+    'canvas.resetLayout': 'Auto-layout',
+    'canvas.layoutReset': 'Tata letak otomatis diterapkan',
+    'canvas.layoutResetFailed': 'Gagal menerapkan tata letak otomatis',
     'error.edge.invalidConnection':
       'Koneksi tidak valid: router dan instans hanya dapat terhubung langsung ke subnet.',
     'error.edge.duplicate': 'Edge antara node ini sudah ada',
@@ -208,6 +211,9 @@ export const translations = {
     'canvas.zoomIn': 'Zoom In',
     'canvas.zoomOut': 'Zoom Out',
     'canvas.fit': 'Fit',
+    'canvas.resetLayout': 'Auto-layout',
+    'canvas.layoutReset': 'Auto-layout applied',
+    'canvas.layoutResetFailed': 'Failed to apply auto-layout',
     'error.edge.invalidConnection':
       'Invalid connection: routers and instances can only connect directly to subnets.',
     'error.edge.duplicate': 'Edge already exists between these nodes',

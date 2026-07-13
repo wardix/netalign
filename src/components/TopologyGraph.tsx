@@ -26,6 +26,7 @@ interface TopologyGraphProps {
     updates: NodePositionUpdate[],
     previous: NodePositionUpdate[],
   ) => void;
+  onResetLayout?: () => void;
 }
 
 const canvasOverlayStyle: React.CSSProperties = {
@@ -48,6 +49,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onNodeSelect,
   onEdgeSelect,
   onNodePositionsChange,
+  onResetLayout,
 }) => {
   const { t } = useI18n();
   const [elements, setElements] = useState<any[]>([]);
@@ -321,6 +323,28 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
           >
             {t('canvas.fit')}
           </button>
+          {onResetLayout && (
+            <button
+              onClick={onResetLayout}
+              style={{
+                padding: '0 10px',
+                height: 32,
+                borderRadius: 4,
+                border: '1px solid #d9d9d9',
+                background: '#fff',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 0 rgba(0,0,0,0.015)',
+              }}
+              title={t('canvas.resetLayout')}
+            >
+              {t('canvas.resetLayout')}
+            </button>
+          )}
         </div>
       </div>
     </div>
