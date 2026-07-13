@@ -1,93 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NetAlign - Network Topology Manager</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- Cytoscape.js for graph rendering -->
-  <script src="https://unpkg.com/cytoscape@3.27.2/dist/cytoscape.min.js"></script>
-</head>
-<body>
-  <header>
-    <h1>NetAlign</h1>
-    <div class="subtitle">Premium Bun + Hono + Cytoscape Network Layout Manager</div>
-  </header>
-  <main class="app-layout">
-    <!-- Sidebar Control Panel -->
-    <aside class="control-panel">
-      <!-- Section 1: Topology Select & CRUD -->
-      <section class="panel-section">
-        <h3>Topology Manager</h3>
-        <div class="form-group">
-          <label for="topology-select">Pilih Topologi</label>
-          <select id="topology-select">
-            <!-- Loaded dynamically from API -->
-          </select>
-        </div>
-        <div class="form-group row">
-          <input type="text" id="new-topology-name" placeholder="Nama Topologi Baru..." />
-          <button id="btn-create-topology" class="btn-primary">Buat</button>
-        </div>
-        <button id="btn-delete-topology" class="btn-danger w-100">Hapus Topologi Ini</button>
-      </section>
-
-      <!-- Section 2: Node CRUD -->
-      <section class="panel-section">
-        <h3>Node Manager</h3>
-        <div class="form-group">
-          <label for="node-type">Tipe Node</label>
-          <select id="node-type">
-            <option value="subnet">Subnet (Vertical Bar)</option>
-            <option value="router">Router (Diamond)</option>
-            <option value="instance">VM Instance (Round Rect)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="node-id">Node ID (Unik)</label>
-          <input type="text" id="node-id" placeholder="Contoh: subnet-3, vm-4" />
-        </div>
-        <div class="form-group">
-          <label for="node-label">Label Node</label>
-          <input type="text" id="node-label" placeholder="Contoh: Subnet 192.168... / VM Server" />
-        </div>
-        <button id="btn-add-node" class="btn-primary w-100">Tambah Node</button>
-        
-        <div class="selected-indicator" id="selected-node-info">
-          Info: Klik node di grafik untuk memilih.
-        </div>
-        <button id="btn-delete-node" class="btn-danger w-100" disabled>Hapus Node Terpilih</button>
-      </section>
-
-      <!-- Section 3: Edge CRUD -->
-      <section class="panel-section">
-        <h3>Edge Manager</h3>
-        <div class="form-group">
-          <label for="edge-source">Source Node</label>
-          <select id="edge-source">
-            <!-- Loaded dynamically from active nodes -->
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="edge-target">Target Node</label>
-          <select id="edge-target">
-            <!-- Loaded dynamically from active nodes -->
-          </select>
-        </div>
-        <button id="btn-add-edge" class="btn-primary w-100">Hubungkan Node</button>
-        
-        <div class="selected-indicator" id="selected-edge-info">
-          Info: Klik garis edge untuk memilih.
-        </div>
-        <button id="btn-delete-edge" class="btn-danger w-100" disabled>Hapus Edge Terpilih</button>
-      </section>
-    </aside>
-
-    <!-- Main Cytoscape Canvas Container -->
-    <div class="canvas-container">
-      <div id="cy"></div>
-    </div>
-  </main>
-  <script src="script.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NetAlign - Network Topology Manager</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

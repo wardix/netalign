@@ -7,8 +7,10 @@ interface Node {
   id: string;
   type: string;
   label?: string;
-  data: any;
+  data?: { label?: string };
 }
+
+const getNodeLabel = (node: Node) => node.data?.label || node.label || node.id;
 interface Edge {
   id: string;
   source: string;
@@ -158,19 +160,19 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({ activeTopologyId, trigger
         const cyElements: any[] = [];
         subnets.forEach(s => {
           cyElements.push({
-            data: { id: s.id, label: s.label || s.id, type: 'subnet', color: subnetColors[s.id], shape: 'round-rectangle', width: 20, height: SUBNET_HEIGHT },
+            data: { id: s.id, label: getNodeLabel(s), type: 'subnet', color: subnetColors[s.id], shape: 'round-rectangle', width: 20, height: SUBNET_HEIGHT },
             position: pos[s.id]
           });
         });
         routers.forEach(r => {
           cyElements.push({
-            data: { id: r.id, label: r.label || r.id, type: 'router', color: ROUTER_COLOR, shape: 'diamond', width: 60, height: 60 },
+            data: { id: r.id, label: getNodeLabel(r), type: 'router', color: ROUTER_COLOR, shape: 'diamond', width: 60, height: 60 },
             position: pos[r.id]
           });
         });
         instances.forEach(i => {
           cyElements.push({
-            data: { id: i.id, label: i.label || i.id, type: 'instance', color: INSTANCE_COLOR, shape: 'round-rectangle', width: 90, height: 36 },
+            data: { id: i.id, label: getNodeLabel(i), type: 'instance', color: INSTANCE_COLOR, shape: 'round-rectangle', width: 90, height: 36 },
             position: pos[i.id]
           });
         });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-import { Layout, Menu, Select, Button, Input, Form, message, Modal, Divider, Space } from 'antd';
+import { Layout, Select, Button, Input, Form, message, Modal, Divider, Space, Descriptions } from 'antd';
 import TopologyGraph from './components/TopologyGraph';
 import { API_BASE } from './api';
 
@@ -43,35 +43,50 @@ const App: React.FC = () => {
     loadTopologies();
   }, []);
 
-  // Selection handlers with detail fetch
+  const loadTopologyDetail = (topologyId: string) =>
+    fetch(`${API_BASE}/api/topologies/${topologyId}`).then(res => {
+      if (!res.ok) throw new Error('Failed to load topology');
+      return res.json();
+    });
+
   const handleNodeSelect = (nodeId: string) => {
     setSelectedNodeId(nodeId);
     setSelectedEdgeId(null);
     setSelectedEdgeData(null);
-    // fetch node details
-    if (activeTopologyId) {
-      fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${nodeId}`)
-        .then(res => res.json())
-        .then(data => {
-          setSelectedNodeData(data);
-          setNodeModalVisible(true);
-        })
-        .catch(err => console.error('Failed node detail', err));
-    }
+    if (!activeTopologyId) return;
+    loadTopologyDetail(activeTopologyId)
+      .then(data => {
+        const node = data.nodes.find((n: { id: string }) => n.id === nodeId);
+        if (!node) return;
+        setSelectedNodeData({
+          id: node.id,
+          label: node.data?.label || node.id,
+          type: node.type,
+        });
+        setNodeModalVisible(true);
+      })
+      .catch(err => {
+        console.error('Failed node detail', err);
+        message.error('Failed to load node details');
+      });
   };
+
   const handleEdgeSelect = (edgeId: string) => {
     setSelectedEdgeId(edgeId);
     setSelectedNodeId(null);
     setSelectedNodeData(null);
-    if (activeTopologyId) {
-      fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${edgeId}`)
-        .then(res => res.json())
-        .then(data => {
-          setSelectedEdgeData(data);
-          setEdgeModalVisible(true);
-        })
-        .catch(err => console.error('Failed edge detail', err));
-    }
+    if (!activeTopologyId) return;
+    loadTopologyDetail(activeTopologyId)
+      .then(data => {
+        const edge = data.edges.find((e: { id: string }) => e.id === edgeId);
+        if (!edge) return;
+        setSelectedEdgeData(edge);
+        setEdgeModalVisible(true);
+      })
+      .catch(err => {
+        console.error('Failed edge detail', err);
+        message.error('Failed to load edge details');
+      });
   };
 
   // --- Topology actions ---
@@ -138,6 +153,7 @@ const App: React.FC = () => {
       })
       .then(() => {
         message.success('Node added');
+        nodeForm.resetFields();
         setRefreshKey(k => k + 1);
       })
       .catch(err => {
@@ -159,6 +175,9 @@ const App: React.FC = () => {
           })
           .then(() => {
             message.success('Node deleted');
+            setSelectedNodeId(null);
+            setSelectedNodeData(null);
+            setNodeModalVisible(false);
             setRefreshKey(k => k + 1);
           })
           .catch(err => {
@@ -184,6 +203,7 @@ const App: React.FC = () => {
       })
       .then(() => {
         message.success('Edge added');
+        edgeForm.resetFields();
         setRefreshKey(k => k + 1);
       })
       .catch(err => {
@@ -204,6 +224,9 @@ const App: React.FC = () => {
           })
           .then(() => {
             message.success('Edge deleted');
+            setSelectedEdgeId(null);
+            setSelectedEdgeData(null);
+            setEdgeModalVisible(false);
             setRefreshKey(k => k + 1);
           })
           .catch(err => {
@@ -231,7 +254,7 @@ const App: React.FC = () => {
         display: 'flex',
         alignItems: 'center'
       }}>
-        NetAlign – Ant Design UI
+        NetAlign
       </Header>
       <Layout style={{ background: '#0e1117' }}>
         <Sider
@@ -245,7 +268,7 @@ const App: React.FC = () => {
             backdropFilter: 'blur(8px)'
           }}
         >
-          <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Topologies</Divider>
+          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Topologies</Divider>
           <Select
             style={{ width: '100%' }}
             placeholder="Select topology"
@@ -281,7 +304,7 @@ const App: React.FC = () => {
             <Button danger onClick={deleteTopology}>Delete</Button>
           </Space>
 
-          <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Node</Divider>
+          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Node</Divider>
           <Form form={nodeForm} layout="vertical" onFinish={addNode} style={{ marginBottom: 12 }}>
             <Form.Item name="nodeId" label="Node ID" rules={[{ required: true }]}> <Input /> </Form.Item>
             <Form.Item name="nodeLabel" label="Label" rules={[{ required: true }]}> <Input /> </Form.Item>
@@ -295,7 +318,7 @@ const App: React.FC = () => {
             <Button type="primary" htmlType="submit" block>Add Node</Button>
           </Form>
 
-          <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Edge</Divider>
+          <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Edge</Divider>
           <Form form={edgeForm} layout="vertical" onFinish={addEdge} style={{ marginBottom: 12 }}>
             <Form.Item name="source" label="Source" rules={[{ required: true }]}> <Input /> </Form.Item>
             <Form.Item name="target" label="Target" rules={[{ required: true }]}> <Input /> </Form.Item>
@@ -305,7 +328,7 @@ const App: React.FC = () => {
           {/* Selected item actions */}
           {selectedNodeId && (
             <>
-              <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Node</Divider>
+              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Node</Divider>
               <Space>
                 <span style={{ color: '#fff' }}>{selectedNodeId}</span>
                 <Button danger onClick={() => deleteNode(selectedNodeId)}>Delete Node</Button>
@@ -314,7 +337,7 @@ const App: React.FC = () => {
           )}
           {selectedEdgeId && (
             <>
-              <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Edge</Divider>
+              <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Edge</Divider>
               <Space>
                 <span style={{ color: '#fff' }}>{selectedEdgeId}</span>
                 <Button danger onClick={() => deleteEdge(selectedEdgeId)}>Delete Edge</Button>
@@ -334,98 +357,35 @@ const App: React.FC = () => {
             onNodeSelect={handleNodeSelect}
             onEdgeSelect={handleEdgeSelect}
           />
-        <Modal
-  title="Node Details"
-  visible={nodeModalVisible}
-  onCancel={() => setNodeModalVisible(false)}
-  footer={null}
->
-  {selectedNodeData ? (
-    <Form layout="vertical" initialValues={selectedNodeData} onFinish={(values) => {
-      // simple update via PUT
-      fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${selectedNodeId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      })
-        .then(res => {
-          if (!res.ok) throw new Error('Update failed');
-          return res.json();
-        })
-        .then(() => {
-          message.success('Node updated');
-          setNodeModalVisible(false);
-          setRefreshKey(k => k + 1);
-        })
-        .catch(err => {
-          console.error(err);
-          message.error('Failed to update node');
-        });
-    }}>
-      <Form.Item name="id" label="ID" rules={[{ required: true }]}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item name="label" label="Label" rules={[{ required: true }]}>
-        <Input />
-      </Form.Item>
-      <Form.Item name="type" label="Type" rules={[{ required: true }]}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item>
-        <Space>
-          <Button type="primary" htmlType="submit">Save</Button>
-          <Button onClick={() => setNodeModalVisible(false)}>Cancel</Button>
-        </Space>
-      </Form.Item>
-    </Form>
-  ) : <p>Loading...</p>}
-</Modal>
+          <Modal
+            title="Node Details"
+            open={nodeModalVisible}
+            onCancel={() => setNodeModalVisible(false)}
+            footer={<Button onClick={() => setNodeModalVisible(false)}>Close</Button>}
+          >
+            {selectedNodeData ? (
+              <Descriptions column={1} bordered size="small">
+                <Descriptions.Item label="ID">{selectedNodeData.id}</Descriptions.Item>
+                <Descriptions.Item label="Label">{selectedNodeData.label}</Descriptions.Item>
+                <Descriptions.Item label="Type">{selectedNodeData.type}</Descriptions.Item>
+              </Descriptions>
+            ) : <p>Loading...</p>}
+          </Modal>
 
-<Modal
-  title="Edge Details"
-  visible={edgeModalVisible}
-  onCancel={() => setEdgeModalVisible(false)}
-  footer={null}
->
-  {selectedEdgeData ? (
-    <Form layout="vertical" initialValues={selectedEdgeData} onFinish={(values) => {
-      fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${selectedEdgeId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      })
-        .then(res => {
-          if (!res.ok) throw new Error('Update failed');
-          return res.json();
-        })
-        .then(() => {
-          message.success('Edge updated');
-          setEdgeModalVisible(false);
-          setRefreshKey(k => k + 1);
-        })
-        .catch(err => {
-          console.error(err);
-          message.error('Failed to update edge');
-        });
-    }}>
-      <Form.Item name="id" label="ID" rules={[{ required: true }]}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item name="source" label="Source" rules={[{ required: true }]}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item name="target" label="Target" rules={[{ required: true }]}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item>
-        <Space>
-          <Button type="primary" htmlType="submit">Save</Button>
-          <Button onClick={() => setEdgeModalVisible(false)}>Cancel</Button>
-        </Space>
-      </Form.Item>
-    </Form>
-  ) : <p>Loading...</p>}
-</Modal>
+          <Modal
+            title="Edge Details"
+            open={edgeModalVisible}
+            onCancel={() => setEdgeModalVisible(false)}
+            footer={<Button onClick={() => setEdgeModalVisible(false)}>Close</Button>}
+          >
+            {selectedEdgeData ? (
+              <Descriptions column={1} bordered size="small">
+                <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
+                <Descriptions.Item label="Source">{selectedEdgeData.source}</Descriptions.Item>
+                <Descriptions.Item label="Target">{selectedEdgeData.target}</Descriptions.Item>
+              </Descriptions>
+            ) : <p>Loading...</p>}
+          </Modal>
 </Content>
       </Layout>
       </Layout>
