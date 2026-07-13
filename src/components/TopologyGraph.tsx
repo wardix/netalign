@@ -3,8 +3,18 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Button, Empty, Spin } from 'antd';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { useI18n } from '../i18n/I18nProvider.tsx';
-import { computeLayout, type LayoutEdge } from '../../shared/layoutEngine.ts';
+import {
+  computeLayout,
+  getConnectedPeerIds,
+  type LayoutEdge,
+} from '../../shared/layoutEngine.ts';
+import type { NodePosition } from '../../shared/nodePosition.ts';
 import type { TopologyNode } from '../../shared/topologyNodes.ts';
+
+interface NodePositionUpdate {
+  nodeId: string;
+  position: NodePosition;
+}
 
 interface TopologyGraphProps {
   nodes: TopologyNode[];
@@ -15,6 +25,7 @@ interface TopologyGraphProps {
   onRetry?: () => void;
   onNodeSelect?: (nodeId: string) => void;
   onEdgeSelect?: (edgeId: string) => void;
+  onNodePositionsChange?: (updates: NodePositionUpdate[]) => void;
 }
 
 const canvasOverlayStyle: React.CSSProperties = {
@@ -36,11 +47,16 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onRetry,
   onNodeSelect,
   onEdgeSelect,
+  onNodePositionsChange,
 }) => {
   const { t } = useI18n();
   const [elements, setElements] = useState<any[]>([]);
   const [styles, setStyles] = useState<any[]>([]);
   const cyRef = useRef<any>(null);
+  const dragStateRef = useRef<{
+    nodeId: string;
+    startPositions: Record<string, NodePosition>;
+  } | null>(null);
 
   useEffect(() => {
     const { elements: cyElements, styles: cyStyles } = computeLayout(nodes, edges);
@@ -51,6 +67,16 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+
+    const refreshStylesFromCy = () => {
+      const livePositions: Record<string, NodePosition> = {};
+      cy.nodes().forEach((node: any) => {
+        livePositions[node.id()] = node.position();
+      });
+      const { styles: nextStyles } = computeLayout(nodes, edges, livePositions);
+      cy.style(nextStyles);
+    };
+
     const onNodeTap = (evt: any) => {
       const id = evt.target.id();
       if (onNodeSelect) onNodeSelect(id);
@@ -59,13 +85,87 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const id = evt.target.id();
       if (onEdgeSelect) onEdgeSelect(id);
     };
+    const onGrab = (evt: any) => {
+      const node = evt.target;
+      const nodeId = node.id();
+      const nodeData = nodes.find(n => n.id === nodeId);
+      if (!nodeData) return;
+
+      const startPositions: Record<string, NodePosition> = {
+        [nodeId]: { ...node.position() },
+      };
+
+      if (nodeData.type === 'subnet') {
+        getConnectedPeerIds(nodeId, nodeData.type, edges, nodes).forEach(peerId => {
+          const peer = cy.getElementById(peerId);
+          if (peer.nonempty()) {
+            startPositions[peerId] = { ...peer.position() };
+          }
+        });
+      }
+
+      dragStateRef.current = { nodeId, startPositions };
+    };
+    const onDrag = (evt: any) => {
+      const state = dragStateRef.current;
+      if (!state) return;
+
+      const node = evt.target;
+      const nodeId = node.id();
+      const nodeData = nodes.find(n => n.id === nodeId);
+      if (!nodeData || nodeId !== state.nodeId) return;
+
+      if (nodeData.type === 'subnet') {
+        const current = node.position();
+        const start = state.startPositions[nodeId];
+        const delta = { x: current.x - start.x, y: current.y - start.y };
+
+        getConnectedPeerIds(nodeId, nodeData.type, edges, nodes).forEach(peerId => {
+          const peerStart = state.startPositions[peerId];
+          if (!peerStart) return;
+          cy.getElementById(peerId).position({
+            x: peerStart.x + delta.x,
+            y: peerStart.y + delta.y,
+          });
+        });
+      }
+
+      refreshStylesFromCy();
+    };
+    const onDragFree = () => {
+      const state = dragStateRef.current;
+      dragStateRef.current = null;
+      if (!state || !onNodePositionsChange) return;
+
+      const movedIds = new Set<string>([state.nodeId]);
+      const nodeData = nodes.find(n => n.id === state.nodeId);
+      if (nodeData?.type === 'subnet') {
+        getConnectedPeerIds(state.nodeId, nodeData.type, edges, nodes).forEach(id => movedIds.add(id));
+      }
+
+      const updates = [...movedIds].map(id => ({
+        nodeId: id,
+        position: cy.getElementById(id).position(),
+      }));
+
+      onNodePositionsChange(updates);
+    };
+
+    cy.nodes().grabify();
     cy.on('tap', 'node', onNodeTap);
     cy.on('tap', 'edge', onEdgeTap);
+    cy.on('grab', 'node', onGrab);
+    cy.on('drag', 'node', onDrag);
+    cy.on('dragfree', 'node', onDragFree);
+
     return () => {
       cy.removeListener('tap', 'node', onNodeTap);
       cy.removeListener('tap', 'edge', onEdgeTap);
+      cy.removeListener('grab', 'node', onGrab);
+      cy.removeListener('drag', 'node', onDrag);
+      cy.removeListener('dragfree', 'node', onDragFree);
     };
-  }, [elements, onNodeSelect, onEdgeSelect]);
+  }, [elements, nodes, edges, onNodeSelect, onEdgeSelect, onNodePositionsChange]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {

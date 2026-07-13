@@ -1,4 +1,5 @@
 import { buildEdgeId } from './edgeIds.ts';
+import type { NodePosition } from './nodePosition.ts';
 import { getNodeLabel, type TopologyNode } from './topologyNodes.ts';
 
 export interface LayoutEdge {
@@ -116,7 +117,11 @@ function buildBaseStyles(): CytoscapeStyle[] {
   ];
 }
 
-export function computeLayout(nodes: TopologyNode[], edges: LayoutEdge[]): LayoutResult {
+export function computeLayout(
+  nodes: TopologyNode[],
+  edges: LayoutEdge[],
+  positionOverrides?: Record<string, NodePosition>,
+): LayoutResult {
   const subnets = nodes.filter(n => n.type === 'subnet');
   const routers = nodes.filter(n => n.type === 'router');
   const instances = nodes.filter(n => n.type === 'instance' || n.type === 'vm');
@@ -221,6 +226,12 @@ export function computeLayout(nodes: TopologyNode[], edges: LayoutEdge[]): Layou
     });
   });
 
+  applySavedPositions(nodes, pos);
+  if (positionOverrides) {
+    Object.assign(pos, positionOverrides);
+  }
+  const resolvedEndpoints = buildSubnetEndpoints(nodes, edges, pos);
+
   const cyElements: CytoscapeElement[] = [];
   subnets.forEach(s => {
     cyElements.push({
@@ -294,7 +305,7 @@ export function computeLayout(nodes: TopologyNode[], edges: LayoutEdge[]): Layou
     const subnetId = subnetNode.id;
     const peerId = peerNode.id;
     const subnetColor = subnetColors[subnetId];
-    const endpointInfo = subnetEndpoints[subnetId][peerId];
+    const endpointInfo = resolvedEndpoints[subnetId][peerId];
     if (!endpointInfo) return;
     const subnetYOffset = endpointInfo.offset;
     const side = endpointInfo.side;
@@ -332,4 +343,76 @@ export function computeLayout(nodes: TopologyNode[], edges: LayoutEdge[]): Layou
     elements: cyElements,
     styles: [...buildBaseStyles(), ...edgeStyles],
   };
+}
+
+export function applySavedPositions(
+  nodes: TopologyNode[],
+  pos: Record<string, NodePosition>,
+): void {
+  nodes.forEach(node => {
+    if (node.position) {
+      pos[node.id] = { x: node.position.x, y: node.position.y };
+    }
+  });
+}
+
+export function buildSubnetEndpoints(
+  nodes: TopologyNode[],
+  edges: LayoutEdge[],
+  pos: Record<string, NodePosition>,
+): Record<string, Record<string, { side: string; offset: number }>> {
+  const subnets = nodes.filter(n => n.type === 'subnet');
+  const subnetEndpoints: Record<string, Record<string, { side: string; offset: number }>> = {};
+  subnets.forEach(s => {
+    subnetEndpoints[s.id] = {};
+  });
+
+  edges.forEach(e => {
+    const src = nodes.find(n => n.id === e.source);
+    const tgt = nodes.find(n => n.id === e.target);
+    if (!src || !tgt) return;
+
+    let subnetNode: TopologyNode | undefined;
+    let peerNode: TopologyNode | undefined;
+    if (src.type === 'subnet' && (tgt.type === 'router' || tgt.type === 'instance' || tgt.type === 'vm')) {
+      subnetNode = src;
+      peerNode = tgt;
+    } else if (tgt.type === 'subnet' && (src.type === 'router' || src.type === 'instance' || src.type === 'vm')) {
+      subnetNode = tgt;
+      peerNode = src;
+    } else {
+      return;
+    }
+
+    const subnetPos = pos[subnetNode.id];
+    const peerPos = pos[peerNode.id];
+    if (!subnetPos || !peerPos) return;
+
+    const side = peerPos.x < subnetPos.x ? 'left' : 'right';
+    subnetEndpoints[subnetNode.id][peerNode.id] = {
+      side,
+      offset: peerPos.y - subnetPos.y,
+    };
+  });
+
+  return subnetEndpoints;
+}
+
+export function getConnectedPeerIds(
+  nodeId: string,
+  nodeType: string,
+  edges: LayoutEdge[],
+  nodes: TopologyNode[],
+): string[] {
+  if (nodeType !== 'subnet') return [];
+
+  const peerIds = new Set<string>();
+  edges.forEach(edge => {
+    if (edge.source !== nodeId && edge.target !== nodeId) return;
+    const peerId = edge.source === nodeId ? edge.target : edge.source;
+    const peer = nodes.find(n => n.id === peerId);
+    if (peer && peer.type !== 'subnet') peerIds.add(peerId);
+  });
+
+  return [...peerIds];
 }

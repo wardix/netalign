@@ -5,6 +5,7 @@ import { readdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { buildEdgeId } from '../shared/edgeIds.ts';
 import { getGatewayValidationError, normalizeGateway } from '../shared/edgeGateway.ts';
+import { getPositionValidationError, parseNodePosition } from '../shared/nodePosition.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import { resolveTopologyFilePath, validateRouteId } from './paths.ts';
 import type { Context } from 'hono';
@@ -238,10 +239,11 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
 
   try {
     const body = await c.req.json();
-    const label = typeof body.label === 'string' ? body.label.trim() : '';
+    const labelProvided = Object.prototype.hasOwnProperty.call(body, 'label');
+    const positionProvided = Object.prototype.hasOwnProperty.call(body, 'position');
 
-    if (!label) {
-      return c.json({ error: 'Label is required' }, 400);
+    if (!labelProvided && !positionProvided) {
+      return c.json({ error: 'Label or position is required' }, 400);
     }
 
     const data = await Bun.file(filePath).json();
@@ -251,7 +253,21 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
       return c.json({ error: 'Node not found' }, 404);
     }
 
-    node.data = { ...node.data, label };
+    if (labelProvided) {
+      const label = typeof body.label === 'string' ? body.label.trim() : '';
+      if (!label) {
+        return c.json({ error: 'Label is required' }, 400);
+      }
+      node.data = { ...node.data, label };
+    }
+
+    if (positionProvided) {
+      const positionError = getPositionValidationError(body.position);
+      if (positionError) {
+        return c.json({ error: positionError }, 400);
+      }
+      node.position = parseNodePosition(body.position);
+    }
 
     await Bun.write(filePath, JSON.stringify(data, null, 2));
     return c.json(node);
