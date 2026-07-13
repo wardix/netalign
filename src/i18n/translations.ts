@@ -105,6 +105,9 @@ export const translations = {
     'canvas.resetLayout': 'Auto-layout',
     'canvas.layoutReset': 'Tata letak otomatis diterapkan',
     'canvas.layoutResetFailed': 'Gagal menerapkan tata letak otomatis',
+    'canvas.crashTitle': 'Kanvas topologi error',
+    'canvas.crashDetail':
+      'Terjadi kesalahan saat merender grafik. Coba lagi atau pilih topologi lain.',
     'error.edge.invalidConnection':
       'Koneksi tidak valid: router dan instans hanya dapat terhubung langsung ke subnet.',
     'error.edge.duplicate': 'Edge antara node ini sudah ada',
@@ -214,6 +217,9 @@ export const translations = {
     'canvas.resetLayout': 'Auto-layout',
     'canvas.layoutReset': 'Auto-layout applied',
     'canvas.layoutResetFailed': 'Failed to apply auto-layout',
+    'canvas.crashTitle': 'Topology canvas error',
+    'canvas.crashDetail':
+      'Something went wrong while rendering the graph. Try again or switch topologies.',
     'error.edge.invalidConnection':
       'Invalid connection: routers and instances can only connect directly to subnets.',
     'error.edge.duplicate': 'Edge already exists between these nodes',

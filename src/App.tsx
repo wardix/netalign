@@ -7,6 +7,7 @@ import { useTopologyMutations } from './hooks/useTopologyMutations.ts';
 import { useCommandHistory } from './hooks/useCommandHistory.ts';
 import { useI18n } from './i18n/I18nProvider.tsx';
 import { AppHeader } from './components/AppHeader.tsx';
+import { GraphErrorBoundary } from './components/GraphErrorBoundary.tsx';
 import { TopologySidebar } from './components/TopologySidebar.tsx';
 
 const { Content } = Layout;
@@ -172,26 +173,32 @@ const App: React.FC = () => {
             backgroundSize: '24px 24px',
           }}
         >
-          <Suspense
-            fallback={
-              <div style={graphFallbackStyle}>
-                <Spin size="large" tip={t('canvas.loading')} />
-              </div>
-            }
+          <GraphErrorBoundary
+            resetKey={activeTopologyId}
+            onRetry={() => void refreshTopology()}
+            t={t}
           >
-            <TopologyGraph
-              nodes={activeNodes}
-              edges={activeEdges}
-              loading={topologyLoading}
-              error={topologyError}
-              hasTopology={!!activeTopologyId}
-              onRetry={() => void refreshTopology()}
-              onNodeSelect={selection.selectNode}
-              onEdgeSelect={selection.selectEdge}
-              onNodePositionsChange={mutations.saveNodePositions}
-              onResetLayout={() => void mutations.resetLayout()}
-            />
-          </Suspense>
+            <Suspense
+              fallback={
+                <div style={graphFallbackStyle}>
+                  <Spin size="large" tip={t('canvas.loading')} />
+                </div>
+              }
+            >
+              <TopologyGraph
+                nodes={activeNodes}
+                edges={activeEdges}
+                loading={topologyLoading}
+                error={topologyError}
+                hasTopology={!!activeTopologyId}
+                onRetry={() => void refreshTopology()}
+                onNodeSelect={selection.selectNode}
+                onEdgeSelect={selection.selectEdge}
+                onNodePositionsChange={mutations.saveNodePositions}
+                onResetLayout={() => void mutations.resetLayout()}
+              />
+            </Suspense>
+          </GraphErrorBoundary>
         </Content>
       </Layout>
     </Layout>
