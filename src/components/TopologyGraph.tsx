@@ -1,5 +1,6 @@
 // src/components/TopologyGraph.tsx
 import React, { useEffect, useState, useRef } from 'react';
+import { Alert, Button, Empty, Spin } from 'antd';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { buildEdgeId } from '../../shared/edgeIds.ts';
 import type { TopologyNode } from '../../shared/topologyNodes.ts';
@@ -19,9 +20,23 @@ const getNodeLabel = (node: GraphNode) => node.data?.label || node.label || node
 interface TopologyGraphProps {
   nodes: TopologyNode[];
   edges: TopologyEdge[];
+  loading?: boolean;
+  error?: string | null;
+  hasTopology?: boolean;
+  onRetry?: () => void;
   onNodeSelect?: (nodeId: string) => void;
   onEdgeSelect?: (edgeId: string) => void;
 }
+
+const canvasOverlayStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  height: '100%',
+  padding: 24,
+  color: '#9ca3af',
+};
 
 function buildGraphElements(nodes: GraphNode[], edges: TopologyEdge[]) {
   const SUBNET_PALETTE = ['#F5A623', '#50E3C2', '#4A90E2', '#7ED321', '#E67E22', '#1ABC9C'];
@@ -302,7 +317,16 @@ function buildGraphElements(nodes: GraphNode[], edges: TopologyEdge[]) {
   return { elements: cyElements, styles };
 }
 
-const TopologyGraph: React.FC<TopologyGraphProps> = ({ nodes, edges, onNodeSelect, onEdgeSelect }) => {
+const TopologyGraph: React.FC<TopologyGraphProps> = ({
+  nodes,
+  edges,
+  loading = false,
+  error = null,
+  hasTopology = true,
+  onRetry,
+  onNodeSelect,
+  onEdgeSelect,
+}) => {
   const [elements, setElements] = useState<any[]>([]);
   const [styles, setStyles] = useState<any[]>([]);
   const cyRef = useRef<any>(null);
@@ -350,6 +374,51 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({ nodes, edges, onNodeSelec
       cyRef.current.center();
     }
   };
+
+  if (error) {
+    return (
+      <div style={canvasOverlayStyle}>
+        <Alert
+          type="error"
+          showIcon
+          message="Failed to load topology"
+          description={error}
+          action={
+            onRetry ? (
+              <Button size="small" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : undefined
+          }
+          style={{ maxWidth: 420 }}
+        />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={canvasOverlayStyle}>
+        <Spin size="large" tip="Loading topology..." />
+      </div>
+    );
+  }
+
+  if (!hasTopology) {
+    return (
+      <div style={canvasOverlayStyle}>
+        <Empty description="Select a topology from the sidebar" />
+      </div>
+    );
+  }
+
+  if (nodes.length === 0) {
+    return (
+      <div style={canvasOverlayStyle}>
+        <Empty description="No nodes in this topology" />
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

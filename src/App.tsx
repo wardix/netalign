@@ -38,6 +38,8 @@ const App: React.FC = () => {
   const [selectedEdgeData, setSelectedEdgeData] = useState<TopologyEdge | null>(null);
   const [activeNodes, setActiveNodes] = useState<TopologyNode[]>([]);
   const [activeEdges, setActiveEdges] = useState<TopologyEdge[]>([]);
+  const [topologyLoading, setTopologyLoading] = useState(false);
+  const [topologyError, setTopologyError] = useState<string | null>(null);
   const [topoForm] = Form.useForm();
   const [nodeForm] = Form.useForm();
   const [edgeForm] = Form.useForm();
@@ -79,18 +81,35 @@ const App: React.FC = () => {
     if (!activeTopologyId) {
       setActiveNodes([]);
       setActiveEdges([]);
+      setTopologyLoading(false);
+      setTopologyError(null);
       return;
     }
+
+    let cancelled = false;
+    setTopologyLoading(true);
+    setTopologyError(null);
+
     loadTopologyDetail(activeTopologyId)
       .then(data => {
+        if (cancelled) return;
         setActiveNodes(data.nodes ?? []);
         setActiveEdges(data.edges ?? []);
       })
       .catch(err => {
+        if (cancelled) return;
         console.error('Failed to load topology detail', err);
         setActiveNodes([]);
         setActiveEdges([]);
+        setTopologyError('Failed to load topology. The server may be unavailable.');
+      })
+      .finally(() => {
+        if (!cancelled) setTopologyLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeTopologyId, refreshKey]);
 
   useEffect(() => {
@@ -599,6 +618,10 @@ const App: React.FC = () => {
           <TopologyGraph
             nodes={activeNodes}
             edges={activeEdges}
+            loading={topologyLoading}
+            error={topologyError}
+            hasTopology={!!activeTopologyId}
+            onRetry={() => setRefreshKey(k => k + 1)}
             onNodeSelect={handleNodeSelect}
             onEdgeSelect={handleEdgeSelect}
           />
