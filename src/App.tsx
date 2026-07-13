@@ -5,6 +5,7 @@ import TopologyGraph from './components/TopologyGraph';
 import { useI18n } from './i18n/I18nProvider.tsx';
 import { translateApiError } from './i18n/translations.ts';
 import { API_BASE } from './api';
+import { getGatewayValidationError } from '../shared/edgeGateway.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import {
   formatNodeOptionLabel,
@@ -24,6 +25,7 @@ interface TopologyEdge {
   id: string;
   source: string;
   target: string;
+  gateway?: string;
 }
 
 const App: React.FC = () => {
@@ -47,6 +49,7 @@ const App: React.FC = () => {
   const [nodeForm] = Form.useForm();
   const [edgeForm] = Form.useForm();
   const [nodeDetailForm] = Form.useForm();
+  const [edgeDetailForm] = Form.useForm();
 
   // Load topologies list
   const loadTopologies = (selectId?: string) => {
@@ -152,6 +155,14 @@ const App: React.FC = () => {
     }
     setSelectedEdgeData(edge);
   }, [activeEdges, selectedEdgeId]);
+
+  useEffect(() => {
+    if (!selectedEdgeData) {
+      edgeDetailForm.resetFields();
+      return;
+    }
+    edgeDetailForm.setFieldsValue({ gateway: selectedEdgeData.gateway || '' });
+  }, [selectedEdgeData, edgeDetailForm]);
 
   const edgeSource = Form.useWatch('source', edgeForm);
 
@@ -367,7 +378,14 @@ const App: React.FC = () => {
   };
 
   // --- Edge actions ---
-  const addEdge = (values: { source: string; target: string }) => {
+  const validateGatewayField = (value: string | undefined): string | null => {
+    const trimmed = value?.trim() || '';
+    if (!trimmed) return null;
+    const error = getGatewayValidationError(trimmed);
+    return error ? translateApiError(error, t) : null;
+  };
+
+  const addEdge = (values: { source: string; target: string; gateway?: string }) => {
     if (!activeTopologyId) return message.warning(t('common.selectTopologyFirst'));
 
     const validationError = validateEdgeForm(values.source, values.target);
@@ -376,10 +394,18 @@ const App: React.FC = () => {
       return;
     }
 
-    const payload = {
+    const gatewayError = validateGatewayField(values.gateway);
+    if (gatewayError) {
+      message.error(gatewayError);
+      return;
+    }
+
+    const payload: { source: string; target: string; gateway?: string } = {
       source: values.source.trim(),
       target: values.target.trim(),
     };
+    const gateway = values.gateway?.trim();
+    if (gateway) payload.gateway = gateway;
     fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -397,6 +423,37 @@ const App: React.FC = () => {
       .catch(err => {
         console.error(err);
         message.error(translateApiError(err.message || t('edges.addFailed'), t));
+      });
+  };
+
+  const updateEdgeGateway = (values: { gateway?: string }) => {
+    if (!activeTopologyId || !selectedEdgeData) return;
+
+    const gatewayError = validateGatewayField(values.gateway);
+    if (gatewayError) {
+      message.error(gatewayError);
+      return;
+    }
+
+    const gateway = values.gateway?.trim() || '';
+
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}/edges/${selectedEdgeData.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gateway }),
+    })
+      .then(res => {
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || t('edges.updateFailed')); });
+        return res.json();
+      })
+      .then(updatedEdge => {
+        message.success(t('edges.updated'));
+        setSelectedEdgeData(updatedEdge);
+        setRefreshKey(k => k + 1);
+      })
+      .catch(err => {
+        console.error(err);
+        message.error(translateApiError(err.message || t('edges.updateFailed'), t));
       });
   };
 
@@ -589,6 +646,9 @@ const App: React.FC = () => {
                 options={targetOptions}
               />
             </Form.Item>
+            <Form.Item name="gateway" label={t('edges.gateway')}>
+              <Input placeholder={t('edges.gatewayPlaceholder')} />
+            </Form.Item>
             <Button type="primary" htmlType="submit" block disabled={activeNodes.length === 0}>
               {t('edges.add')}
             </Button>
@@ -615,12 +675,20 @@ const App: React.FC = () => {
           {selectedEdgeId && selectedEdgeData && (
             <>
               <Divider titlePlacement="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>{t('edges.selectedTitle')}</Divider>
-              <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
-                <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
-                <Descriptions.Item label={t('edges.source')}>{selectedEdgeData.source}</Descriptions.Item>
-                <Descriptions.Item label={t('edges.target')}>{selectedEdgeData.target}</Descriptions.Item>
-              </Descriptions>
-              <Button danger block onClick={() => deleteEdge(selectedEdgeId)}>{t('edges.delete')}</Button>
+              <Form form={edgeDetailForm} layout="vertical" onFinish={updateEdgeGateway}>
+                <Descriptions column={1} bordered size="small" style={{ marginBottom: 12 }}>
+                  <Descriptions.Item label="ID">{selectedEdgeData.id}</Descriptions.Item>
+                  <Descriptions.Item label={t('edges.source')}>{selectedEdgeData.source}</Descriptions.Item>
+                  <Descriptions.Item label={t('edges.target')}>{selectedEdgeData.target}</Descriptions.Item>
+                </Descriptions>
+                <Form.Item name="gateway" label={t('edges.gateway')}>
+                  <Input placeholder={t('edges.gatewayPlaceholder')} allowClear />
+                </Form.Item>
+                <Space style={{ width: '100%' }}>
+                  <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+                  <Button danger onClick={() => deleteEdge(selectedEdgeId)}>{t('edges.delete')}</Button>
+                </Space>
+              </Form>
             </>
           )}
         </Sider>

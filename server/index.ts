@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { readdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { buildEdgeId } from '../shared/edgeIds.ts';
+import { getGatewayValidationError, normalizeGateway } from '../shared/edgeGateway.ts';
 import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 import { resolveTopologyFilePath, validateRouteId } from './paths.ts';
 import type { Context } from 'hono';
@@ -340,11 +341,20 @@ app.post('/api/topologies/:id/edges', async (c) => {
       return c.json({ error: 'Edge already exists between these nodes' }, 400);
     }
 
-    const newEdge = {
+    const gateway = normalizeGateway(body.gateway);
+    if (gateway) {
+      const gatewayError = getGatewayValidationError(gateway);
+      if (gatewayError) {
+        return c.json({ error: gatewayError }, 400);
+      }
+    }
+
+    const newEdge: { id: string; source: string; target: string; gateway?: string } = {
       id: edgeId,
       source,
-      target
+      target,
     };
+    if (gateway) newEdge.gateway = gateway;
 
     data.edges.push(newEdge);
 
@@ -356,7 +366,53 @@ app.post('/api/topologies/:id/edges', async (c) => {
   }
 });
 
-// 10. Delete an edge from a topology
+// 10. Update an edge in a topology
+app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
+  const id = c.req.param('id');
+  const edgeId = c.req.param('edgeId');
+  const invalidEdge = invalidIdResponse(c, edgeId);
+  if (invalidEdge) return invalidEdge;
+
+  const pathResult = topologyPathOrResponse(c, id);
+  if ('response' in pathResult) return pathResult.response;
+  const { filePath } = pathResult;
+
+  if (!(await Bun.file(filePath).exists())) {
+    return c.json({ error: 'Topology not found' }, 404);
+  }
+
+  try {
+    const body = await c.req.json();
+    const gateway = normalizeGateway(body.gateway);
+    if (gateway) {
+      const gatewayError = getGatewayValidationError(gateway);
+      if (gatewayError) {
+        return c.json({ error: gatewayError }, 400);
+      }
+    }
+
+    const data = await Bun.file(filePath).json();
+    const edge = data.edges.find((e: { id: string }) => e.id === edgeId);
+
+    if (!edge) {
+      return c.json({ error: 'Edge not found' }, 404);
+    }
+
+    if (gateway) {
+      edge.gateway = gateway;
+    } else {
+      delete edge.gateway;
+    }
+
+    await Bun.write(filePath, JSON.stringify(data, null, 2));
+    return c.json(edge);
+  } catch (error) {
+    console.error('Error updating edge:', error);
+    return c.json({ error: 'Failed to update edge' }, 500);
+  }
+});
+
+// 11. Delete an edge from a topology
 app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
   const id = c.req.param('id');
   const edgeId = c.req.param('edgeId');
