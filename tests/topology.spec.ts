@@ -69,10 +69,10 @@ test.describe('NetAlign dashboard', () => {
   test('adds a subnet node', async ({ page }) => {
     const nodeId = `subnet-e2e-${Date.now()}`;
 
-    await formItem(page, 'Node ID').getByRole('textbox').fill(nodeId);
+    await formItem(page, 'ID Node').getByRole('textbox').fill(nodeId);
     await formItem(page, 'Label').getByRole('textbox').fill('E2E Subnet');
 
-    await clickAndAwaitPost(page, 'Add Node', /\/api\/topologies\/[^/]+\/nodes$/);
+    await clickAndAwaitPost(page, 'Tambah Node', /\/api\/topologies\/[^/]+\/nodes$/);
   });
 
   test('adds a valid edge using node dropdowns', async ({ page }) => {
@@ -80,16 +80,16 @@ test.describe('NetAlign dashboard', () => {
     const routerId = `router-e2e-${ts}`;
     const routerLabel = `E2E Router ${ts}`;
 
-    await formItem(page, 'Node ID').getByRole('textbox').fill(routerId);
+    await formItem(page, 'ID Node').getByRole('textbox').fill(routerId);
     await formItem(page, 'Label').getByRole('textbox').fill(routerLabel);
-    await selectFormDropdown(page, 'Type', /^Router$/);
+    await selectFormDropdown(page, 'Tipe', /^Router$/);
 
-    await clickAndAwaitPost(page, 'Add Node', /\/api\/topologies\/[^/]+\/nodes$/);
+    await clickAndAwaitPost(page, 'Tambah Node', /\/api\/topologies\/[^/]+\/nodes$/);
 
-    await selectFormDropdown(page, 'Source', `${routerLabel} (ROUTER)`);
+    await selectFormDropdown(page, 'Sumber', `${routerLabel} (ROUTER)`);
     await expect(formItem(page, 'Target').getByRole('combobox')).toBeEnabled();
     await selectFormDropdown(page, 'Target', 'Subnet-1');
 
-    await clickAndAwaitPost(page, 'Add Edge', /\/api\/topologies\/[^/]+\/edges$/);
+    await clickAndAwaitPost(page, 'Tambah Edge', /\/api\/topologies\/[^/]+\/edges$/);
   });
 });
