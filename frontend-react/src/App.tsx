@@ -220,11 +220,32 @@ const App: React.FC = () => {
   const [edgeForm] = Form.useForm();
 
   return (
-    <Layout style={{ height: '100vh' }}>
-      <Header style={{ color: '#fff', fontSize: 20 }}>NetAlign – Ant Design UI</Header>
-      <Layout>
-        <Sider width={300} theme="light" style={{ background: '#fff', padding: 16, overflow: 'auto' }}>
-          <Divider orientation="left">Topologies</Divider>
+    <Layout style={{ height: '100vh', background: '#0e1117' }}>
+      <Header style={{
+        background: 'rgba(20, 24, 33, 0.85)',
+        color: '#f3f4f6',
+        fontSize: 20,
+        fontWeight: '600',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center'
+      }}>
+        NetAlign – Ant Design UI
+      </Header>
+      <Layout style={{ background: '#0e1117' }}>
+        <Sider
+          width={300}
+          theme="dark"
+          style={{
+            background: 'rgba(20, 24, 33, 0.85)',
+            borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: 16,
+            overflow: 'auto',
+            backdropFilter: 'blur(8px)'
+          }}
+        >
+          <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Topologies</Divider>
           <Select
             style={{ width: '100%' }}
             placeholder="Select topology"
@@ -260,7 +281,7 @@ const App: React.FC = () => {
             <Button danger onClick={deleteTopology}>Delete</Button>
           </Space>
 
-          <Divider orientation="left">Add Node</Divider>
+          <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Node</Divider>
           <Form form={nodeForm} layout="vertical" onFinish={addNode} style={{ marginBottom: 12 }}>
             <Form.Item name="nodeId" label="Node ID" rules={[{ required: true }]}> <Input /> </Form.Item>
             <Form.Item name="nodeLabel" label="Label" rules={[{ required: true }]}> <Input /> </Form.Item>
@@ -274,7 +295,7 @@ const App: React.FC = () => {
             <Button type="primary" htmlType="submit" block>Add Node</Button>
           </Form>
 
-          <Divider orientation="left">Add Edge</Divider>
+          <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Add Edge</Divider>
           <Form form={edgeForm} layout="vertical" onFinish={addEdge} style={{ marginBottom: 12 }}>
             <Form.Item name="source" label="Source" rules={[{ required: true }]}> <Input /> </Form.Item>
             <Form.Item name="target" label="Target" rules={[{ required: true }]}> <Input /> </Form.Item>
@@ -284,30 +305,35 @@ const App: React.FC = () => {
           {/* Selected item actions */}
           {selectedNodeId && (
             <>
-              <Divider orientation="left">Selected Node</Divider>
+              <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Node</Divider>
               <Space>
-                <span>{selectedNodeId}</span>
+                <span style={{ color: '#fff' }}>{selectedNodeId}</span>
                 <Button danger onClick={() => deleteNode(selectedNodeId)}>Delete Node</Button>
               </Space>
             </>
           )}
           {selectedEdgeId && (
             <>
-              <Divider orientation="left">Selected Edge</Divider>
+              <Divider orientation="left" style={{ borderColor: 'rgba(255, 255, 255, 0.15)', color: '#9ca3af' }}>Selected Edge</Divider>
               <Space>
-                <span>{selectedEdgeId}</span>
+                <span style={{ color: '#fff' }}>{selectedEdgeId}</span>
                 <Button danger onClick={() => deleteEdge(selectedEdgeId)}>Delete Edge</Button>
               </Space>
             </>
           )}
         </Sider>
-        <Content style={{ padding: 0 }}>
+        <Content style={{
+          padding: 0,
+          background: '#0e1117',
+          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 0)',
+          backgroundSize: '24px 24px'
+        }}>
           <TopologyGraph
-        activeTopologyId={activeTopologyId}
-        triggerRefresh={refreshKey}
-        onNodeSelect={handleNodeSelect}
-        onEdgeSelect={handleEdgeSelect}
-      />
+            activeTopologyId={activeTopologyId}
+            triggerRefresh={refreshKey}
+            onNodeSelect={handleNodeSelect}
+            onEdgeSelect={handleEdgeSelect}
+          />
         <Modal
   title="Node Details"
   visible={nodeModalVisible}
