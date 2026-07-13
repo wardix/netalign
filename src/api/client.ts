@@ -1,5 +1,7 @@
-import { API_BASE } from '../api.ts';
+import { COLLAB_CLIENT_HEADER } from '../../shared/collabProtocol.ts';
 import { isApiErrorCode, type ApiErrorCode } from '../../shared/apiErrors.ts';
+import { API_BASE } from '../api.ts';
+import { getCollabClientId } from '../collab/clientId.ts';
 
 export class ApiError extends Error {
   status: number;
@@ -41,15 +43,25 @@ function buildUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+function collabHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra);
+  try {
+    headers.set(COLLAB_CLIENT_HEADER, getCollabClientId());
+  } catch {
+    // ignore missing storage
+  }
+  return headers;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(buildUrl(path));
+  const res = await fetch(buildUrl(path), { headers: collabHeaders() });
   return handleResponse<T>(res);
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: collabHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return handleResponse<T>(res);
@@ -58,7 +70,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: collabHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return handleResponse<T>(res);
@@ -67,14 +79,17 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: collabHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return handleResponse<T>(res);
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-  const res = await fetch(buildUrl(path), { method: 'DELETE' });
+  const res = await fetch(buildUrl(path), {
+    method: 'DELETE',
+    headers: collabHeaders(),
+  });
   return handleResponse<T>(res);
 }
 

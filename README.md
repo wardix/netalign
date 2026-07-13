@@ -285,6 +285,20 @@ Machine-readable contract (aligned with `shared/types.ts` and `shared/apiErrors.
 
 Validate the spec locally: `bun run openapi:check` (also covered by unit tests).
 
+### Real-time collaboration (WebSocket)
+
+Multiple clients on the same topology receive live updates after REST mutations.
+
+| Item | Detail |
+|------|--------|
+| Endpoint | `WS /api/ws?topologyId=&clientId=` |
+| Model | **Last-write-wins** (SQLite is source of truth; no OT/CRDT) |
+| Echo filter | `X-Collab-Client-Id` on REST + matching WS client id |
+| Reconnect | Silent full topology refetch (store cannot stay corrupt) |
+| Docs | [`docs/collaboration.md`](docs/collaboration.md) |
+
+Unauthenticated for now (see issue #53).
+
 ### Health
 
 | Method | Endpoint | Description |

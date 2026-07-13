@@ -27,7 +27,14 @@ import {
   codeFromErrorMessage,
   type ApiErrorCode,
 } from '../shared/apiErrors.ts';
+import { COLLAB_CLIENT_HEADER } from '../shared/collabProtocol.ts';
 import { openApiDocument } from '../shared/openapi.ts';
+import {
+  collabWebsocket,
+  isCollabWsPath,
+  publishTopologyEvent,
+  tryUpgradeCollabSocket,
+} from './collabWs.ts';
 import { createCorsOriginResolver } from './corsConfig.ts';
 import { getLiveness, getReadiness } from './health.ts';
 import {
@@ -131,6 +138,12 @@ function topologyNotFound(c: Context) {
   return jsonError(c, 404, 'TOPOLOGY_NOT_FOUND');
 }
 
+/** Optional client id used to suppress echo of the caller's own collab events. */
+function originClientId(c: Context): string | undefined {
+  const value = c.req.header(COLLAB_CLIENT_HEADER)?.trim();
+  return value || undefined;
+}
+
 // Machine-readable OpenAPI 3 document (always available).
 app.get('/api/openapi.json', c => c.json(openApiDocument));
 
@@ -188,6 +201,11 @@ app.patch('/api/topologies/:id', async (c) => {
 
     const updated = topologyStore.renameTopology(idResult.topologyId, name);
     if (!updated) return topologyNotFound(c);
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'topology.renamed', topologyId: idResult.topologyId, name: updated.name },
+      originClientId(c),
+    );
     return c.json(updated satisfies TopologySummary);
   } catch (error) {
     logRouteError('Error updating topology', error, c);
@@ -244,6 +262,11 @@ app.post('/api/topologies/import', async (c) => {
     }
 
     topologyStore.createTopology(topology);
+    publishTopologyEvent(
+      topology.id,
+      { kind: 'topology.replaced', topologyId: topology.id, topology },
+      originClientId(c),
+    );
     return c.json(topology, 201);
   } catch (error) {
     logRouteError('Error importing topology', error, c);
@@ -281,6 +304,11 @@ app.post('/api/topologies/:id/delete', async (c) => {
 
   try {
     topologyStore.deleteTopology(idResult.topologyId);
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'topology.deleted', topologyId: idResult.topologyId },
+      originClientId(c),
+    );
     return c.json({
       success: true,
       message: `Deleted topology ${id}`,
@@ -307,6 +335,11 @@ app.delete('/api/topologies/:id', async (c) => {
 
   try {
     topologyStore.deleteTopology(idResult.topologyId);
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'topology.deleted', topologyId: idResult.topologyId },
+      originClientId(c),
+    );
     return c.json({ success: true, message: `Deleted topology ${id}` });
   } catch (error) {
     logRouteError('Error deleting topology', error, c);
@@ -346,6 +379,11 @@ app.post('/api/topologies/:id/nodes', async (c) => {
     };
 
     topologyStore.addNode(idResult.topologyId, newNode);
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'node.upserted', topologyId: idResult.topologyId, node: newNode },
+      originClientId(c),
+    );
     return c.json(newNode, 201);
   } catch (error) {
     logRouteError('Error adding node', error, c);
@@ -390,6 +428,15 @@ app.put('/api/topologies/:id/nodes/positions', async (c) => {
       const status = result.error.startsWith('Node not found') ? 404 : 400;
       return jsonErrorFromMessage(c, status === 404 ? 404 : 400, result.error);
     }
+    publishTopologyEvent(
+      idResult.topologyId,
+      {
+        kind: 'nodes.positions',
+        topologyId: idResult.topologyId,
+        updates: parsed,
+      },
+      originClientId(c),
+    );
     return c.json({ nodes: result.nodes });
   } catch (error) {
     logRouteError('Error batch-updating node positions', error, c);
@@ -444,6 +491,11 @@ app.put('/api/topologies/:id/nodes/:nodeId', async (c) => {
     }
 
     if (!node) return jsonError(c, 404, 'NODE_NOT_FOUND');
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'node.upserted', topologyId: idResult.topologyId, node },
+      originClientId(c),
+    );
     return c.json(node);
   } catch (error) {
     logRouteError('Error updating node', error, c);
@@ -471,6 +523,11 @@ app.delete('/api/topologies/:id/nodes/:nodeId', async (c) => {
       return jsonError(c, 404, 'NODE_NOT_FOUND');
     }
 
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'node.removed', topologyId: idResult.topologyId, nodeId },
+      originClientId(c),
+    );
     return c.json({ success: true, message: `Node ${nodeId} deleted with connections` });
   } catch (error) {
     logRouteError('Error deleting node', error, c);
@@ -534,6 +591,11 @@ app.post('/api/topologies/:id/edges', async (c) => {
     if (gateway) newEdge.gateway = gateway;
 
     topologyStore.addEdge(idResult.topologyId, newEdge);
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'edge.upserted', topologyId: idResult.topologyId, edge: newEdge },
+      originClientId(c),
+    );
     return c.json(newEdge, 201);
   } catch (error) {
     logRouteError('Error adding edge', error, c);
@@ -575,6 +637,11 @@ app.put('/api/topologies/:id/edges/:edgeId', async (c) => {
       return jsonError(c, 404, 'EDGE_NOT_FOUND');
     }
 
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'edge.upserted', topologyId: idResult.topologyId, edge },
+      originClientId(c),
+    );
     return c.json(edge);
   } catch (error) {
     logRouteError('Error updating edge', error, c);
@@ -602,6 +669,11 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
       return jsonError(c, 404, 'EDGE_NOT_FOUND');
     }
 
+    publishTopologyEvent(
+      idResult.topologyId,
+      { kind: 'edge.removed', topologyId: idResult.topologyId, edgeId },
+      originClientId(c),
+    );
     return c.json({ success: true, message: `Edge ${edgeId} deleted` });
   } catch (error) {
     logRouteError('Error deleting edge', error, c);
@@ -612,7 +684,20 @@ app.delete('/api/topologies/:id/edges/:edgeId', async (c) => {
 const port = parseInt(Bun.env.PORT || process.env.PORT || '5000', 10);
 logger.info('server_listen', { port, url: `http://localhost:${port}` });
 
+type BunServerLike = {
+  upgrade: (req: Request, options: { data: import('./collabHub.ts').CollabSocketData }) => boolean;
+};
+
+async function handleFetch(req: Request, server?: BunServerLike): Promise<Response | undefined> {
+  const pathname = new URL(req.url).pathname;
+  if (isCollabWsPath(pathname)) {
+    return tryUpgradeCollabSocket(req, server);
+  }
+  return app.fetch(req);
+}
+
 export default {
   port,
-  fetch: app.fetch,
+  fetch: handleFetch,
+  websocket: collabWebsocket,
 };

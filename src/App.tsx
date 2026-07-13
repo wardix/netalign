@@ -4,6 +4,7 @@ import { useTopologies } from './hooks/useTopologies.ts';
 import { useTopology } from './hooks/useTopology.ts';
 import { useSelection } from './hooks/useSelection.ts';
 import { useTopologyMutations } from './hooks/useTopologyMutations.ts';
+import { useTopologyCollab } from './hooks/useTopologyCollab.ts';
 import { useCommandHistory } from './hooks/useCommandHistory.ts';
 import { useIsNarrowLayout } from './hooks/useMediaQuery.ts';
 import { useI18n } from './i18n/I18nProvider.tsx';
@@ -38,6 +39,8 @@ const App: React.FC = () => {
     loading: topologyLoading,
     error: topologyError,
     refresh: refreshTopology,
+    setNodes,
+    setEdges,
     upsertNode,
     removeNode,
     upsertEdge,
@@ -52,6 +55,44 @@ const App: React.FC = () => {
     () => refreshTopology({ silent: true }),
     [refreshTopology],
   );
+
+  const collabHandlers = useMemo(
+    () => ({
+      upsertNode,
+      removeNode,
+      upsertEdge,
+      removeEdge,
+      patchNodePositions,
+      replaceTopology: (nodes: typeof activeNodes, edges: typeof activeEdges) => {
+        setNodes(nodes);
+        setEdges(edges);
+      },
+      silentRefresh,
+      onTopologyMetaChange: () => {
+        void refreshTopologies();
+      },
+      onTopologyDeleted: (topologyId: string) => {
+        if (topologyId === activeTopologyId) {
+          setActiveTopologyId(null);
+        }
+        void refreshTopologies();
+      },
+    }),
+    [
+      upsertNode,
+      removeNode,
+      upsertEdge,
+      removeEdge,
+      patchNodePositions,
+      setNodes,
+      setEdges,
+      silentRefresh,
+      refreshTopologies,
+      activeTopologyId,
+    ],
+  );
+
+  const collab = useTopologyCollab(activeTopologyId, collabHandlers);
 
   const {
     canUndo,
@@ -157,6 +198,8 @@ const App: React.FC = () => {
         showPanelToggle
         panelOpen={panelOpen}
         onTogglePanel={() => setSiderCollapsed(prev => !prev)}
+        collabStatus={collab.status}
+        collabPeerCount={collab.peerCount}
       />
       <Layout style={{ background: '#0e1117', minHeight: 0, flex: 1 }}>
         <TopologySidebar
