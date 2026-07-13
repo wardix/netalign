@@ -196,6 +196,28 @@ const App: React.FC = () => {
       });
   };
 
+  const renameTopology = (name: string) => {
+    if (!activeTopologyId) return;
+
+    fetch(`${API_BASE}/api/topologies/${activeTopologyId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+      .then(res => {
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || 'Rename failed'); });
+        return res.json();
+      })
+      .then(updated => {
+        message.success(`Topology renamed to "${updated.name}"`);
+        loadTopologies(activeTopologyId);
+      })
+      .catch(err => {
+        console.error(err);
+        message.error(err.message || 'Failed to rename topology');
+      });
+  };
+
   const deleteTopology = () => {
     if (!activeTopologyId) return;
     if (activeTopologyId === 'topology-1') {
@@ -418,13 +440,13 @@ const App: React.FC = () => {
               </Select.Option>
             ))}
           </Select>
-          <Space style={{ marginTop: 8, width: '100%' }}>
+          <Space wrap style={{ marginTop: 8, width: '100%' }}>
             <Button type="primary" onClick={() => {
               Modal.confirm({
                 title: 'Create Topology',
                 content: (
                   <Form form={topoForm} layout="vertical">
-                    <Form.Item name="name" label="Name" rules={[{ required: true }]}> 
+                    <Form.Item name="name" label="Name" rules={[{ required: true }]}>
                       <Input />
                     </Form.Item>
                   </Form>
@@ -438,6 +460,32 @@ const App: React.FC = () => {
                 cancelText: 'Cancel',
               });
             }}>New</Button>
+            <Button
+              disabled={!activeTopologyId}
+              onClick={() => {
+                const currentName = topologies.find(t => t.id === activeTopologyId)?.name || '';
+                topoForm.setFieldsValue({ name: currentName });
+                Modal.confirm({
+                  title: 'Rename Topology',
+                  content: (
+                    <Form form={topoForm} layout="vertical">
+                      <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+                        <Input />
+                      </Form.Item>
+                    </Form>
+                  ),
+                  onOk: async () => {
+                    const values = await topoForm.validateFields();
+                    renameTopology(values.name);
+                    topoForm.resetFields();
+                  },
+                  okText: 'Save',
+                  cancelText: 'Cancel',
+                });
+              }}
+            >
+              Rename
+            </Button>
             <Button danger onClick={deleteTopology}>Delete</Button>
           </Space>
 

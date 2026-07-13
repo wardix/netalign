@@ -31,6 +31,60 @@ describe('topology CRUD API', () => {
     expect(body.id).toBe('topology-1');
     expect(Array.isArray(body.nodes)).toBe(true);
     expect(Array.isArray(body.edges)).toBe(true);
+    expect(body.edges.every((edge: { id: string; source: string; target: string }) =>
+      edge.id === `e-${edge.source}-${edge.target}`,
+    )).toBe(true);
+  });
+
+  test('renames a topology', async () => {
+    const createResponse = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Original Name' }),
+      }),
+    );
+    const topology = await createResponse.json();
+    createdTopologyIds.push(topology.id);
+
+    const renameResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Renamed Topology' }),
+      }),
+    );
+    expect(renameResponse.status).toBe(200);
+
+    const renamed = await renameResponse.json();
+    expect(renamed.name).toBe('Renamed Topology');
+
+    const readResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}`),
+    );
+    const body = await readResponse.json();
+    expect(body.name).toBe('Renamed Topology');
+  });
+
+  test('rejects empty topology name on rename', async () => {
+    const createResponse = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Rename Validation' }),
+      }),
+    );
+    const topology = await createResponse.json();
+    createdTopologyIds.push(topology.id);
+
+    const renameResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '   ' }),
+      }),
+    );
+    expect(renameResponse.status).toBe(400);
   });
 
   test('creates and deletes a topology', async () => {

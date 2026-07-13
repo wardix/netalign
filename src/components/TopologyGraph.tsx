@@ -1,6 +1,7 @@
 // src/components/TopologyGraph.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
+import { buildEdgeId } from '../../shared/edgeIds.ts';
 import type { TopologyNode } from '../../shared/topologyNodes.ts';
 
 interface TopologyEdge {
@@ -179,7 +180,7 @@ function buildGraphElements(nodes: GraphNode[], edges: TopologyEdge[]) {
 
   const edgeStyles: any[] = [];
   edges.forEach(e => {
-    const edgeId = e.id || `e-${e.source}-${e.target}`;
+    const edgeId = e.id || buildEdgeId(e.source, e.target);
     cyElements.push({ data: { id: edgeId, source: e.source, target: e.target } });
     const srcNode = nodes.find(n => n.id === e.source);
     const tgtNode = nodes.find(n => n.id === e.target);
