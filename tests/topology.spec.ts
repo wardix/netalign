@@ -224,6 +224,17 @@ test.describe('NetAlign dashboard', () => {
     await expect(page.getByRole('navigation', { name: 'Panel kontrol topologi' })).toBeVisible();
   });
 
+  test('searches for a node and shows minimap and focus control', async ({ page }) => {
+    await expect(page.getByRole('img', { name: 'Minimap topologi' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Fokus' })).toBeVisible();
+
+    const search = page.getByPlaceholder(/Cari node/);
+    await search.fill('Subnet-1');
+    await search.press('Enter');
+    // Search focuses the graph; selection detail appears in the sidebar for Subnet-1.
+    await expect(page.getByText('Node Terpilih')).toBeVisible({ timeout: 10_000 });
+  });
+
   test('empty topology shows guided wizard and sample scaffold', async ({ page }) => {
     await page.getByRole('button', { name: 'Baru' }).click();
     const nameInput = page.locator('.ant-modal-confirm .ant-form-item').filter({

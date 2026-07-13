@@ -218,9 +218,22 @@ const App: React.FC = () => {
                 loading={topologyLoading}
                 error={topologyError}
                 hasTopology={!!activeTopologyId}
+                selectedNodeId={selection.selectedNodeId}
+                selectedEdgeId={selection.selectedEdgeId}
                 onRetry={() => void refreshTopology()}
                 onNodeSelect={selection.selectNode}
                 onEdgeSelect={selection.selectEdge}
+                onDeselect={() => {
+                  selection.clearNodeSelection();
+                  selection.clearEdgeSelection();
+                }}
+                onDeleteSelection={() => {
+                  if (selection.selectedNodeId) {
+                    mutations.deleteNode(selection.selectedNodeId);
+                  } else if (selection.selectedEdgeId) {
+                    mutations.deleteEdge(selection.selectedEdgeId);
+                  }
+                }}
                 onNodePositionsChange={mutations.saveNodePositions}
                 onResetLayout={() => void mutations.resetLayout()}
                 onScaffoldSample={() => void mutations.scaffoldSample()}
