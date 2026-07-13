@@ -33,4 +33,13 @@ describe('health HTTP routes', () => {
     expect(body.status).toBe('ready');
     expect(body.database).toBe('ok');
   });
+
+  test('GET /api/openapi.json returns OpenAPI 3 document', async () => {
+    const response = await server.fetch(new Request('http://localhost/api/openapi.json'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.openapi).toMatch(/^3\./);
+    expect(body.paths['/api/topologies']).toBeDefined();
+    expect(body.components.schemas.Topology).toBeDefined();
+  });
 });
