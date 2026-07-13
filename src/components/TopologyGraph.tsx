@@ -1,9 +1,21 @@
 // src/components/TopologyGraph.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AutoComplete, Button, Empty, Input, Spin } from 'antd';
+import type {
+  Core,
+  EventObject,
+  EventObjectNode,
+  NodeSingular,
+  StylesheetStyle,
+} from 'cytoscape';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { useI18n } from '../i18n/I18nProvider.tsx';
-import { computeLayout, getConnectedPeerIds } from '../../shared/layoutEngine.ts';
+import {
+  computeLayout,
+  getConnectedPeerIds,
+  type CytoscapeElement,
+  type CytoscapeStyle,
+} from '../../shared/layoutEngine.ts';
 import type { NodePosition } from '../../shared/nodePosition.ts';
 import { getNodeLabel, type TopologyNode } from '../../shared/topologyNodes.ts';
 import type { TopologyEdge } from '../../shared/types.ts';
@@ -13,6 +25,24 @@ import { EmptyTopologyGuide } from './EmptyTopologyGuide.tsx';
 interface NodePositionUpdate {
   nodeId: string;
   position: NodePosition;
+}
+
+type PositionedNodeElement = CytoscapeElement & {
+  position: NodePosition;
+  data: Record<string, unknown> & { id: string };
+};
+
+function isPositionedNodeElement(el: CytoscapeElement): el is PositionedNodeElement {
+  return (
+    el.position != null &&
+    typeof el.data.id === 'string' &&
+    el.data.source === undefined
+  );
+}
+
+function toStylesheet(styles: CytoscapeStyle[]): StylesheetStyle[] {
+  // Layout engine styles match Cytoscape stylesheet JSON shape (selector + style map).
+  return styles as StylesheetStyle[];
 }
 
 interface TopologyGraphProps {
@@ -83,11 +113,11 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   scaffolding = false,
 }) => {
   const { t } = useI18n();
-  const [elements, setElements] = useState<any[]>([]);
-  const [styles, setStyles] = useState<any[]>([]);
+  const [elements, setElements] = useState<CytoscapeElement[]>([]);
+  const [styles, setStyles] = useState<CytoscapeStyle[]>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const cyRef = useRef<any>(null);
+  const cyRef = useRef<Core | null>(null);
   const dragStateRef = useRef<{
     nodeId: string;
     startPositions: Record<string, NodePosition>;
@@ -146,12 +176,13 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
     const refreshStylesFromCy = () => {
       const livePositions: Record<string, NodePosition> = {};
-      cy.nodes().forEach((node: any) => {
-        livePositions[node.id()] = node.position();
+      cy.nodes().forEach((node: NodeSingular) => {
+        const pos = node.position();
+        livePositions[node.id()] = { x: pos.x, y: pos.y };
       });
       try {
         const { styles: nextStyles } = computeLayout(nodes, edges, livePositions);
-        cy.style(nextStyles);
+        cy.style().fromJson(toStylesheet(nextStyles)).update();
         setLayoutError(null);
       } catch (err) {
         console.error('Layout style refresh failed', err);
@@ -159,45 +190,47 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
       }
     };
 
-    const onNodeTap = (evt: any) => {
+    const onNodeTap = (evt: EventObjectNode) => {
       const id = evt.target.id();
       cy.nodes().removeClass('search-hit');
       if (onNodeSelect) onNodeSelect(id);
     };
-    const onEdgeTap = (evt: any) => {
+    const onEdgeTap = (evt: EventObject) => {
       const id = evt.target.id();
       cy.nodes().removeClass('search-hit');
       if (onEdgeSelect) onEdgeSelect(id);
     };
-    const onBackgroundTap = (evt: any) => {
+    const onBackgroundTap = (evt: EventObject) => {
       if (evt.target === cy) {
         cy.nodes().removeClass('search-hit');
         cy.elements().unselect();
         onDeselect?.();
       }
     };
-    const onGrab = (evt: any) => {
+    const onGrab = (evt: EventObjectNode) => {
       const node = evt.target;
       const nodeId = node.id();
       const nodeData = nodes.find(n => n.id === nodeId);
       if (!nodeData) return;
 
+      const pos = node.position();
       const startPositions: Record<string, NodePosition> = {
-        [nodeId]: { ...node.position() },
+        [nodeId]: { x: pos.x, y: pos.y },
       };
 
       if (nodeData.type === 'subnet') {
         getConnectedPeerIds(nodeId, nodeData.type, edges, nodes).forEach(peerId => {
           const peer = cy.getElementById(peerId);
           if (peer.nonempty()) {
-            startPositions[peerId] = { ...peer.position() };
+            const peerPos = peer.position();
+            startPositions[peerId] = { x: peerPos.x, y: peerPos.y };
           }
         });
       }
 
       dragStateRef.current = { nodeId, startPositions };
     };
-    const onDrag = (evt: any) => {
+    const onDrag = (evt: EventObjectNode) => {
       const state = dragStateRef.current;
       if (!state) return;
 
@@ -209,6 +242,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
       if (nodeData.type === 'subnet') {
         const current = node.position();
         const start = state.startPositions[nodeId];
+        if (!start) return;
         const delta = { x: current.x - start.x, y: current.y - start.y };
 
         getConnectedPeerIds(nodeId, nodeData.type, edges, nodes).forEach(peerId => {
@@ -234,10 +268,10 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
         getConnectedPeerIds(state.nodeId, nodeData.type, edges, nodes).forEach(id => movedIds.add(id));
       }
 
-      const updates = [...movedIds].map(id => ({
-        nodeId: id,
-        position: cy.getElementById(id).position(),
-      }));
+      const updates = [...movedIds].map(id => {
+        const pos = cy.getElementById(id).position();
+        return { nodeId: id, position: { x: pos.x, y: pos.y } };
+      });
       const previous = [...movedIds].map(id => ({
         nodeId: id,
         position: { ...state.startPositions[id]! },
@@ -255,12 +289,12 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     cy.on('dragfree', 'node', onDragFree);
 
     return () => {
-      cy.removeListener('tap', 'node', onNodeTap);
-      cy.removeListener('tap', 'edge', onEdgeTap);
-      cy.removeListener('tap', onBackgroundTap);
-      cy.removeListener('grab', 'node', onGrab);
-      cy.removeListener('drag', 'node', onDrag);
-      cy.removeListener('dragfree', 'node', onDragFree);
+      cy.off('tap', 'node', onNodeTap);
+      cy.off('tap', 'edge', onEdgeTap);
+      cy.off('tap', onBackgroundTap);
+      cy.off('grab', 'node', onGrab);
+      cy.off('drag', 'node', onDrag);
+      cy.off('dragfree', 'node', onDragFree);
     };
   }, [elements, nodes, edges, onNodeSelect, onEdgeSelect, onDeselect, onNodePositionsChange, t]);
 
@@ -363,9 +397,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   }));
 
   const minimap = useMemo(() => {
-    const positioned = elements.filter(
-      (el: any) => el.position && typeof el.data?.id === 'string' && el.data?.source === undefined,
-    ) as { data: { id: string; type?: string; color?: string }; position: NodePosition }[];
+    const positioned = elements.filter(isPositionedNodeElement);
     if (positioned.length === 0) return null;
 
     let minX = Infinity;
@@ -490,9 +522,9 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
         <CytoscapeComponent
           elements={elements}
           style={{ width: '100%', height: '100%' }}
-          stylesheet={styles}
+          stylesheet={toStylesheet(styles)}
           layout={{ name: 'preset' }}
-          cy={cy => {
+          cy={(cy: Core) => {
             cyRef.current = cy;
           }}
         />
