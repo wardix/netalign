@@ -146,6 +146,9 @@ const App: React.FC = () => {
 
   return (
     <Layout style={{ height: '100vh', background: '#0e1117' }}>
+      <a href="#main-content" className="skip-link">
+        {t('a11y.skipToContent')}
+      </a>
       <AppHeader
         canUndo={canUndo}
         canRedo={canRedo}
@@ -155,7 +158,7 @@ const App: React.FC = () => {
         panelOpen={panelOpen}
         onTogglePanel={() => setSiderCollapsed(prev => !prev)}
       />
-      <Layout style={{ background: '#0e1117', minHeight: 0, flex: 1 }} id="topology-sidebar">
+      <Layout style={{ background: '#0e1117', minHeight: 0, flex: 1 }}>
         <TopologySidebar
           topologies={topologies}
           activeTopologyId={activeTopologyId}
@@ -185,6 +188,8 @@ const App: React.FC = () => {
           onCollapsedChange={setSiderCollapsed}
         />
         <Content
+          id="main-content"
+          tabIndex={-1}
           style={{
             padding: 0,
             background: '#0e1117',
@@ -192,6 +197,7 @@ const App: React.FC = () => {
             backgroundSize: '24px 24px',
             minWidth: 0,
             minHeight: 0,
+            outline: 'none',
           }}
         >
           <GraphErrorBoundary

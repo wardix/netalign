@@ -128,6 +128,15 @@ export const translations = {
     'wizard.notEmpty': 'Topologi ini sudah berisi node',
     'layout.showPanel': 'Panel',
     'layout.hidePanel': 'Sembunyikan',
+    'a11y.skipToContent': 'Lompat ke kanvas',
+    'a11y.sidebarNav': 'Panel kontrol topologi',
+    'a11y.historyGroup': 'Riwayat suntingan',
+    'a11y.localeSelect': 'Pilih bahasa antarmuka',
+    'a11y.canvasRegion': 'Area kanvas topologi',
+    'a11y.canvasGraph': 'Graf topologi jaringan interaktif',
+    'a11y.canvasToolbar': 'Kontrol zoom dan tata letak kanvas',
+    'a11y.canvasLimitations':
+      'Kanvas digambar dengan Cytoscape. Navigasi simpul/edge dengan pointer atau sentuh; pemilihan lewat klik. Panel sidebar mendukung keyboard penuh untuk menambah, mengubah, dan menghapus.',
     'error.edge.invalidConnection':
       'Koneksi tidak valid: router dan instans hanya dapat terhubung langsung ke subnet.',
     'error.edge.duplicate': 'Edge antara node ini sudah ada',
@@ -257,6 +266,15 @@ export const translations = {
     'wizard.notEmpty': 'This topology already has nodes',
     'layout.showPanel': 'Panel',
     'layout.hidePanel': 'Hide panel',
+    'a11y.skipToContent': 'Skip to canvas',
+    'a11y.sidebarNav': 'Topology control panel',
+    'a11y.historyGroup': 'Edit history',
+    'a11y.localeSelect': 'Interface language',
+    'a11y.canvasRegion': 'Topology canvas area',
+    'a11y.canvasGraph': 'Interactive network topology graph',
+    'a11y.canvasToolbar': 'Canvas zoom and layout controls',
+    'a11y.canvasLimitations':
+      'The canvas is rendered with Cytoscape. Navigate nodes and edges with pointer or touch; select by clicking. The sidebar supports full keyboard use for add, edit, and delete.',
     'error.edge.invalidConnection':
       'Invalid connection: routers and instances can only connect directly to subnets.',
     'error.edge.duplicate': 'Edge already exists between these nodes',

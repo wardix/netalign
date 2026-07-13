@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   formatMessage,
   type Locale,
@@ -21,12 +21,23 @@ function readStoredLocale(): Locale {
   return stored === 'en' ? 'en' : 'id';
 }
 
+function applyDocumentLocale(locale: Locale): void {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = locale;
+  }
+}
+
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [locale, setLocaleState] = useState<Locale>(readStoredLocale);
+
+  useEffect(() => {
+    applyDocumentLocale(locale);
+  }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     localStorage.setItem(STORAGE_KEY, next);
+    applyDocumentLocale(next);
   }, []);
 
   const t = useCallback(
