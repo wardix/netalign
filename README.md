@@ -1,117 +1,209 @@
 # NetAlign - Network Topology Manager
 
-A premium, interactive full-stack network topology visualizer and editor. Built using **Bun** and **Hono (TypeScript)** on the backend for high-performance REST APIs, and **Vite**, **Glassmorphic CSS**, and **Cytoscape.js** on the frontend for an elegant, responsive visualization dashboard.
+A premium, interactive full-stack network topology visualizer and editor. Built with **Bun** and **Hono (TypeScript)** on the backend, and **React**, **TypeScript**, **Ant Design**, and **Cytoscape.js** on the frontend.
 
 ---
 
-## 🌟 Features
+## Features
 
-*   **Dynamic Auto-Layout Solver**: Automatically calculates coordinates $(X, Y)$ for all subnets, routers, and VM instances. Subnets align as elegant vertical columns, while routers and instances stack horizontally beside them to minimize crossings.
-*   **Perfect Horizontal Straight Connectors**: No diagonal lines. Edges connect to subnets and nodes using dynamically computed offset endpoints, ensuring all connector lines are completely horizontal and straight.
-*   **Vibrant Color Synchronization**: Subnets receive distinct, vibrant colors dynamically from a premium dark-mode friendly palette. Connectors automatically inherit the color of their respective subnet.
-*   **Interactive Sidebar Control Panel**:
-    *   **Topology Manager**: Create, select, or delete multiple topology configurations.
-    *   **Node Manager**: Add new Subnets, Routers, or VM Instances dynamically.
-    *   **Edge Manager**: Connect nodes visually with real-time topology-rule validation (e.g., routers and instances can only connect directly to subnets).
-*   **Click-to-Select and Cascading Deletion**: Clicking on any node or edge in the graph highlights the element, displays detailed properties in the sidebar, and enables instant visual and database deletion.
-*   **Fast Persistent File DB**: Topologies are saved persistently on the disk under `server/data/` as individual JSON files utilizing Bun's ultra-fast native File I/O.
-
----
-
-## 🛠️ Tech Stack
-
-*   **Backend Runtime**: [Bun](https://bun.sh/) (ultra-fast JS/TS runtime)
-*   **Backend Framework**: [Hono](https://hono.dev/) (lightweight, ultra-fast web framework running on Bun)
-*   **Language**: TypeScript (Backend), ES6 JavaScript (Frontend)
-*   **Frontend Dev Server**: [Vite](https://vite.dev/) (configured with an internal API proxy)
-*   **Visual Rendering**: [Cytoscape.js](https://js.cytoscape.org/) (high-performance graph theory library)
-*   **Styling**: Modern CSS Glassmorphism with 'Outfit' typography
+* **Dynamic Auto-Layout Solver**: Automatically calculates coordinates for subnets, routers, and VM instances. Subnets align as vertical columns; routers and instances stack horizontally beside them to minimize crossings.
+* **Perfect Horizontal Straight Connectors**: Edges connect using dynamically computed offset endpoints so connector lines stay completely horizontal.
+* **Vibrant Color Synchronization**: Subnets receive distinct colors from a premium dark-mode palette. Connectors inherit the color of their respective subnet.
+* **Interactive Sidebar Control Panel**:
+  * **Topology Manager**: Create, rename, select, or delete multiple topology configurations.
+  * **Node Manager**: Add subnets, routers, or VM instances dynamically.
+  * **Edge Manager**: Connect nodes with real-time topology-rule validation and optional gateway/IP labels.
+* **Drag-and-Drop Positioning**: Move nodes on the canvas; positions persist to the backend via the REST API.
+* **Click-to-Select and Cascading Deletion**: Select nodes or edges in the graph to view properties in the sidebar and delete them instantly.
+* **SQLite Persistence**: Topologies are stored in `server/data/netalign.db`. JSON seed files in `server/data/` are auto-imported on first startup.
+* **Internationalization**: Default UI locale is Indonesian (`id`) with an ID/EN toggle.
 
 ---
 
-## 📂 Project Structure
+## Tech Stack
+
+* **Backend Runtime**: [Bun](https://bun.sh/)
+* **Backend Framework**: [Hono](https://hono.dev/)
+* **Language**: TypeScript (frontend and backend)
+* **Frontend**: [React](https://react.dev/) + [Ant Design](https://ant.design/)
+* **Frontend Dev Server**: [Vite](https://vite.dev/) (API proxy to port 5000)
+* **Visual Rendering**: [Cytoscape.js](https://js.cytoscape.org/) via `react-cytoscapejs`
+* **Persistence**: SQLite via Bun's native `bun:sqlite`
+* **Testing**: Bun test (unit/API), Playwright (E2E)
+
+---
+
+## Project Structure
 
 ```text
-/home/wardix/agy/scratchpad/
+netalign/
 ├── server/
-│   ├── data/                 # JSON file persistence database
-│   │   └── topology-1.json   # Seed/default network topology
-│   └── index.ts              # Hono REST API server in TypeScript
-├── index.html                # Sidebar dashboard structures
-├── script.js                 # Frontend state manager & Cytoscape renderer
-├── style.css                 # Premium glassmorphic styling sheet
-├── vite.config.js            # Vite configurations & port 5000 proxy
-├── package.json              # System scripts and frontend dependencies
-└── README.md                 # Project documentation
+│   ├── data/
+│   │   ├── topology-1.json   # Seed topology (imported to SQLite on first run)
+│   │   └── netalign.db       # SQLite database (gitignored)
+│   ├── db.ts                 # Schema, migrations, JSON seed import
+│   ├── topologyStore.ts      # CRUD operations
+│   ├── index.ts              # Hono REST API server
+│   ├── paths.ts              # Route ID validation
+│   └── testPreload.ts        # Test database setup
+├── shared/
+│   ├── types.ts              # Shared TypeScript types
+│   ├── layoutEngine.ts       # Auto-layout and edge endpoint math
+│   ├── edgeValidation.ts     # Topology connection rules
+│   ├── edgeGateway.ts        # Gateway/IP validation
+│   └── nodePosition.ts       # Position validation
+├── src/
+│   ├── api.ts                # API_BASE config (dev proxy vs production)
+│   ├── api/
+│   │   ├── client.ts         # Fetch wrapper
+│   │   └── topologies.ts     # Topology API functions
+│   ├── hooks/
+│   │   ├── useTopologies.ts
+│   │   └── useTopology.ts
+│   ├── components/
+│   │   └── TopologyGraph.tsx # Cytoscape graph renderer
+│   ├── i18n/                 # Indonesian/English translations
+│   ├── App.tsx
+│   ├── Root.tsx
+│   └── main.tsx
+├── tests/                    # Playwright E2E specs
+├── index.html
+├── vite.config.ts
+├── package.json
+└── README.md
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-Make sure [Bun](https://bun.sh/) is installed on your Linux system. If not, install it with:
+
+Install [Bun](https://bun.sh/):
+
 ```bash
 curl -fsSL https://bun.sh/install | bash
 ```
 
 ### Installation
-Clone or navigate to the workspace directory and install dependencies:
+
 ```bash
 bun install
 ```
 
 ### Running the Application
 
-For a fully operational full-stack application, run both the backend API server and the frontend dev server simultaneously.
+Run the backend and frontend in separate terminals:
 
-1.  **Start the Hono Backend Server** (runs on port `5000`):
-    ```bash
-    bun run server/index.ts
-    ```
-2.  **Start the Vite Frontend Server** (runs on port `3000`):
-    ```bash
-    bun run dev
-    ```
+1. **Start the Hono backend** (port `5000`):
 
-Once both servers are running, open your web browser and navigate to:
-👉 **[http://localhost:3000/](http://localhost:3000/)** (or the host domain/IP bound in `vite.config.js`)
+   ```bash
+   bun run server
+   ```
 
----
+2. **Start the Vite frontend** (port `3000`):
 
-## 🌐 Deployment & Cross-Origin Setup (Approach 2)
+   ```bash
+   bun run dev
+   ```
 
-NetAlign natively supports separate cross-origin deployment (e.g. hosting the static frontend on Netlify/Vercel CDN, and hosting the Hono backend on a dedicated VPS/Cloud instance).
+Open **[http://localhost:3000/](http://localhost:3000/)** in your browser.
 
-### Dynamic API Base URL Resolution:
-The frontend [script.js](file:///home/wardix/agy/scratchpad/script.js) features an automated environment detector at the very top of the file:
-1.  **Local Development**: If the browser's hostname is `localhost`, `127.0.0.1`, or an agent development domain, it resolves `API_BASE` to `''` (empty string). This routes all AJAX calls through Vite's local development proxy to prevent CORS issues.
-2.  **Production Deployment**: On any other production domain, it automatically appends your live backend domain to all REST API endpoints.
+On first startup, the backend creates `server/data/netalign.db` and imports any `*.json` seed files from `server/data/`.
 
-### Steps to Deploy Separately:
-1.  Open [script.js](file:///home/wardix/agy/scratchpad/script.js) and locate the `API_BASE` configuration at the top (Line 12).
-2.  Replace `'https://api.netalign.com'` with your live Hono backend VPS domain (e.g. `https://api.yourcompany.com`).
-3.  Build the static optimized frontend bundle:
-    ```bash
-    bun run build
-    ```
-4.  Upload the contents of the newly generated **`dist/`** directory directly to your static hosting platform (e.g. Vercel, Netlify, or AWS S3).
-5.  Deploy the backend server to your VPS running Bun, and set the custom `PORT` variable in your production environment variables (refer to `.env.example`).
+### Scripts
+
+| Script | Description |
+|--------|-------------|
+| `bun run dev` | Vite dev server on port 3000 |
+| `bun run server` | Hono API server on port 5000 |
+| `bun run build` | Type-check and build production bundle to `dist/` |
+| `bun run preview` | Preview the production build locally |
+| `bun run lint` | Run oxlint |
+| `bun run test` | Unit and API tests (SQLite preload) |
+| `bun run test:e2e` | Playwright E2E tests (starts both servers) |
+| `bun run test:e2e:headed` | E2E tests with visible browser |
+| `bun run install:playwright` | Install Playwright Chromium |
 
 ---
 
-## 🔌 API Endpoints Reference
+## Deployment and Cross-Origin Setup
 
-All requests must be prefixed with `/api`. Vite automatically routes `/api/*` traffic from port `3000` to the Bun backend on port `5000`.
+NetAlign supports separate deployment (e.g. static frontend on Netlify/Vercel, backend on a VPS).
 
-### 1. Topology Management
-*   `GET /api/topologies` - Lists all available topologies `{ id, name }`.
-*   `GET /api/topologies/:id` - Fetches detailed JSON content (nodes & edges) of a topology.
-*   `POST /api/topologies` - Creates a new empty topology. Body: `{ name }`.
-*   `DELETE /api/topologies/:id` - Deletes a topology file from disk.
+### Dynamic API Base URL
 
-### 2. Node & Edge Management (inside a specific topology)
-*   `POST /api/topologies/:id/nodes` - Adds a node. Body: `{ nodeId, type, label }`.
-*   `DELETE /api/topologies/:id/nodes/:nodeId` - Deletes a node and automatically cascades to delete all its connected edges.
-*   `POST /api/topologies/:id/edges` - Connects two nodes with an edge. Body: `{ source, target }`.
-*   `DELETE /api/topologies/:id/edges/:edgeId` - Deletes a single connector edge.
+The frontend resolves `API_BASE` in `src/api.ts`:
+
+1. **Local development**: If the hostname is `localhost`, `127.0.0.1`, or an agent development domain, `API_BASE` is `''` so requests go through Vite's proxy (no CORS issues).
+2. **Production**: On any other domain, requests use the configured production backend URL.
+
+### Steps to Deploy Separately
+
+1. Open `src/api.ts` and set the production backend URL (default: `https://api.netalign.com`).
+2. Build the frontend:
+
+   ```bash
+   bun run build
+   ```
+
+3. Upload the contents of `dist/` to your static hosting platform.
+4. Deploy the backend on a VPS with Bun. Set `PORT` (and optionally `NETALIGN_DB_PATH`) in your environment. See `.env.example`.
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust as needed:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `5000` | Hono backend listen port |
+| `NODE_ENV` | `development` | Environment mode |
+| `NETALIGN_DB_PATH` | `server/data/netalign.db` | SQLite database file path |
+
+---
+
+## API Endpoints
+
+All requests are prefixed with `/api`. Vite proxies `/api/*` from port 3000 to the backend on port 5000.
+
+### Topology Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/topologies` | List all topologies `{ id, name }` |
+| `GET` | `/api/topologies/:id` | Fetch full topology (nodes and edges) |
+| `POST` | `/api/topologies` | Create topology. Body: `{ name }` |
+| `PATCH` | `/api/topologies/:id` | Rename topology. Body: `{ name }` |
+| `DELETE` | `/api/topologies/:id` | Delete topology |
+| `POST` | `/api/topologies/:id/delete` | Delete topology (legacy alias) |
+
+### Node Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/topologies/:id/nodes` | Add node. Body: `{ nodeId, type, label }` |
+| `PUT` | `/api/topologies/:id/nodes/:nodeId` | Update label and/or position. Body: `{ label? }` or `{ position: { x, y } }` |
+| `DELETE` | `/api/topologies/:id/nodes/:nodeId` | Delete node and connected edges |
+
+### Edge Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/topologies/:id/edges` | Add edge. Body: `{ source, target, gateway? }` |
+| `PUT` | `/api/topologies/:id/edges/:edgeId` | Update gateway. Body: `{ gateway }` |
+| `DELETE` | `/api/topologies/:id/edges/:edgeId` | Delete edge |
+
+**Topology rules**: Routers and instances may only connect directly to subnets. Routers and instances must not connect to each other.
+
+---
+
+## CI
+
+GitHub Actions runs on every push and pull request to `main`:
+
+1. Lint (`bun run lint`)
+2. Unit and API tests (`bun run test`)
+3. Production build (`bun run build`)
+4. E2E tests (`bun run test:e2e`)
