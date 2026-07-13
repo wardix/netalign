@@ -57,4 +57,16 @@ describe('computeLayout', () => {
     expect(styles.some(s => s.selector === 'node[type="router"]')).toBe(true);
     expect(styles.some(s => s.selector === 'edge[label]')).toBe(true);
   });
+
+  test('uses saved node positions when provided', () => {
+    const nodesWithPositions = [
+      ...sampleNodes.slice(0, 3),
+      { ...sampleNodes[3], position: { x: 180, y: 260 } },
+    ];
+
+    const { elements } = computeLayout(nodesWithPositions, sampleEdges);
+    const instance = elements.find(el => el.data.id === 'vm-1');
+
+    expect(instance?.position).toEqual({ x: 180, y: 260 });
+  });
 });

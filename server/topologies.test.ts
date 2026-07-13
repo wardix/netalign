@@ -219,4 +219,80 @@ describe('node CRUD API', () => {
     );
     expect(updateResponse.status).toBe(400);
   });
+
+  test('updates a node position', async () => {
+    const createResponse = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Node Position Topology' }),
+      }),
+    );
+    const topology = await createResponse.json();
+    createdTopologyIds.push(topology.id);
+
+    await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodeId: 'router-pos',
+          type: 'router',
+          label: 'Router',
+        }),
+      }),
+    );
+
+    const updateResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes/router-pos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: { x: 410, y: 280 } }),
+      }),
+    );
+    expect(updateResponse.status).toBe(200);
+
+    const updated = await updateResponse.json();
+    expect(updated.position).toEqual({ x: 410, y: 280 });
+
+    const readResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}`),
+    );
+    const body = await readResponse.json();
+    const node = body.nodes.find((n: { id: string }) => n.id === 'router-pos');
+    expect(node.position).toEqual({ x: 410, y: 280 });
+  });
+
+  test('rejects invalid node position on update', async () => {
+    const createResponse = await server.fetch(
+      new Request('http://localhost/api/topologies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Node Position Validation Topology' }),
+      }),
+    );
+    const topology = await createResponse.json();
+    createdTopologyIds.push(topology.id);
+
+    await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodeId: 'subnet-pos',
+          type: 'subnet',
+          label: 'Subnet',
+        }),
+      }),
+    );
+
+    const updateResponse = await server.fetch(
+      new Request(`http://localhost/api/topologies/${topology.id}/nodes/subnet-pos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: { x: 'bad', y: 10 } }),
+      }),
+    );
+    expect(updateResponse.status).toBe(400);
+  });
 });

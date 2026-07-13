@@ -303,6 +303,36 @@ const App: React.FC = () => {
       });
   };
 
+  const saveNodePositions = (updates: { nodeId: string; position: { x: number; y: number } }[]) => {
+    if (!activeTopologyId || updates.length === 0) return;
+
+    Promise.all(
+      updates.map(({ nodeId, position }) =>
+        fetch(`${API_BASE}/api/topologies/${activeTopologyId}/nodes/${nodeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ position }),
+        }).then(res => {
+          if (!res.ok) {
+            return res.json().then(e => {
+              throw new Error(e.error || t('nodes.positionSaveFailed'));
+            });
+          }
+          return res.json();
+        }),
+      ),
+    )
+      .then(() => {
+        message.success(t('nodes.positionSaved'));
+        setRefreshKey(k => k + 1);
+      })
+      .catch(err => {
+        console.error(err);
+        message.error(translateApiError(err.message || t('nodes.positionSaveFailed'), t));
+        setRefreshKey(k => k + 1);
+      });
+  };
+
   const updateNodeLabel = (values: { label: string }) => {
     if (!activeTopologyId || !selectedNodeData) return;
 
@@ -707,6 +737,7 @@ const App: React.FC = () => {
             onRetry={() => setRefreshKey(k => k + 1)}
             onNodeSelect={handleNodeSelect}
             onEdgeSelect={handleEdgeSelect}
+            onNodePositionsChange={saveNodePositions}
           />
         </Content>
       </Layout>
