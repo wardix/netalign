@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { readdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { validateEdgeBetweenNodes } from '../shared/edgeValidation.ts';
 
 const app = new Hono();
 
@@ -206,14 +207,22 @@ app.post('/api/topologies/:id/edges', async (c) => {
       return c.json({ error: 'Missing source or target' }, 400);
     }
 
+    if (source === target) {
+      return c.json({ error: 'Source and target must be different nodes' }, 400);
+    }
+
     const data = await Bun.file(filePath).json();
 
-    // Verify source and target exist
-    const sourceExists = data.nodes.some((n: any) => n.id === source);
-    const targetExists = data.nodes.some((n: any) => n.id === target);
+    const sourceNode = data.nodes.find((n: { id: string }) => n.id === source);
+    const targetNode = data.nodes.find((n: { id: string }) => n.id === target);
 
-    if (!sourceExists || !targetExists) {
+    if (!sourceNode || !targetNode) {
       return c.json({ error: 'Source or Target node does not exist' }, 400);
+    }
+
+    const topologyError = validateEdgeBetweenNodes(sourceNode, targetNode);
+    if (topologyError) {
+      return c.json({ error: topologyError }, 400);
     }
 
     const edgeId = `e-${source}-${target}`;
