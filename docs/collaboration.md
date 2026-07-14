@@ -39,7 +39,9 @@ The hub tracks how many sockets are subscribed to a topology and broadcasts `pre
 
 ## Security note
 
-This channel is **unauthenticated** (see GitHub issue #53). Suitable for trusted local/dev or private networks. Do not expose a multi-tenant public deployment without auth and ownership checks.
+HTTP topology routes enforce session + ownership when `NETALIGN_AUTH_MODE=on` (see [`docs/auth.md`](auth.md)). The WebSocket room is keyed only by `topologyId` and does not re-validate ownership on every frame; browsers send cookies on same-origin upgrades, but a client that knows a topology id could still subscribe on an open network.
+
+Treat live collab as best-effort sync for trusted/LAN or private deployments. For public multi-tenant use, keep auth on for REST and prefer reverse-proxy isolation until WS authz is tightened.
 
 ## Operations
 
